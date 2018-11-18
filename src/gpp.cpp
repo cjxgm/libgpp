@@ -110,8 +110,6 @@ Syntax_Mode default_meta_syntax = {"#", "\n", "\001", "\001", "\n", "#", '\\', "
 #define CHARSET_SUBSET_LEN (256 >> LOG_32_BITS)
 using Charset_Subset = std::uint32_t *;
 
-Charset_Subset default_op, default_ext_op, default_id;
-
 struct Comment {
     char *start;        // how the comment/string starts
     char *end;          // how it ends
@@ -1126,10 +1124,6 @@ void initthings(char const* const* argv) {
     char const* const* arg;
     int i, ishelp, hasmeta, usrmode;
 
-    default_op = make_charset_subset(DEFAULT_OP_STRING);
-    default_ext_op = make_charset_subset(DEFAULT_OP_PLUS);
-    default_id = make_charset_subset(DEFAULT_ID_STRING);
-
     nmacros = 0;
     nalloced = 31;
     macros = XX malloc(nalloced * sizeof *macros);
@@ -1139,9 +1133,9 @@ void initthings(char const* const* argv) {
     S->meta = default_meta_syntax;
     S->comments = nullptr;
     S->stack_next = nullptr;
-    S->op_set = default_op;
-    S->ext_op_set = default_ext_op;
-    S->id_set = default_id;
+    S->op_set = make_charset_subset(DEFAULT_OP_STRING);
+    S->ext_op_set = make_charset_subset(DEFAULT_OP_PLUS);
+    S->id_set = make_charset_subset(DEFAULT_ID_STRING);
 
     add_comment(S, "ccc", my_strdup("/*"), my_strdup("*/"), 0, 0);
     add_comment(S, "ccc", my_strdup("//"), my_strdup("\n"), 0, 0);
@@ -2560,11 +2554,30 @@ void process_context() {
     while (!C->eof)
         parse_text();
     free(C->malloced_buf);
+    C->malloced_buf = nullptr;
+}
+
+void finishthings() {
+    while (nmacros > 0)
+        delete_macro(nmacros-1);
+    free(macros);
+
+    free(S->op_set);
+    free(S->ext_op_set);
+    free(S->id_set);
+    free_comments(S);
+    free(S);
+
+    if (C->malloced_buf)
+        free(C->malloced_buf);
+    free(C->out);
+    free(C);
 }
 
 int main(int argc, char *argv[]) {
     (void) argc;
     initthings(argv);
     process_context();
+    finishthings();
 }
 

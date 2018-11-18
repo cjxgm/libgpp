@@ -42,4 +42,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
   - Use `std::uint32_t` instead of `unsigned long`.
   - Convert to a consistent naming style.
   - Convert `function(void)` to `function()`.
+  - Do not leak heap memory before quitting.
 
