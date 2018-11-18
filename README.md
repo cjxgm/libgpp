@@ -46,3 +46,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
   - Throws `std::runtime_error` when encountering `bug(...)`.
   - Wrap everything into a struct and anonymous namespaces.
 
+- `gpp.cpp` is now split into `libgpp` and `gpp` (which calls into `libgpp`).
+

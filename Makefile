@@ -10,8 +10,10 @@ rebuild:
 	@$(MAKE) all
 run: all
 	printf "#eval 1+1\n\n" | build/gpp
-build/gpp: src/libgpp.cpp build/
-	$(CXX) -o $@ $< $(CXXSTD) $(CXXFLAGS)
+build/gpp: src/gpp.cpp src/libgpp.hpp build/libgpp.o | build/
+	$(CXX) -o $@ $< build/libgpp.o $(CXXSTD) $(CXXFLAGS)
+build/libgpp.o: src/libgpp.cpp src/libgpp.hpp | build/
+	$(CXX) -c -o $@ $< $(CXXSTD) $(CXXFLAGS)
 
 %/:
 	@mkdir -p $@
