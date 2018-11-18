@@ -18,3 +18,19 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - Removed all IO (except stdio): `#include`, `#exec`, `#file`, `#date` all gone.
 
+- Removed syntax customization through command-line. You can still customize syntax via `#mode` macro.
+
+- Removed mode switching. There is only 1 mode now. The only mode is now
+  just the original default mode but also recognizes C strings and comments.
+  This is equivalent to:
+
+        #mode user "" "" "(" "," ")" "(" ")" "#" "\\"
+        #mode meta "#" "\n" " " " " "\n" "(" ")"
+        #mode comment "/*" "*/"
+        #mode comment "//" "\n"
+        #mode comment "\\\003" ""
+        #mode string "\"" "\"" "\\"
+        #mode string "'" "'" "\\"
+
+- Removed "Preserve LF". `\n` will never be preserved.
+

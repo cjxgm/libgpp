@@ -59,14 +59,8 @@ typedef struct MODE {
 /*                   st        end   args   sep    arge ref  quot  stk  unstk*/
 struct MODE CUser = {"",       "",   "(",   ",",   ")", "#", '\\', "(", ")" };
 struct MODE CMeta = {"#",      "\n", "\001","\001","\n","#", '\\', "(", ")" };
-struct MODE KUser = {"",       "",   "(",   ",",   ")", "#",  0,   "(", ")" };
-struct MODE KMeta = {"\n#\002","\n", "\001","\001","\n","#",  0,   "",  ""  };
-struct MODE Tex   = {"\\",     "",   "{",   "}{",  "}", "#", '@',  "{", "}" };
-struct MODE Html  = {"<#",     ">",  "\003","|",   ">", "#", '\\', "<", ">" };
-struct MODE XHtml = {"<#",     "/>", "\003","|",   "/>","#", '\\', "<", ">" };
 
 #define DEFAULT_OP_STRING (unsigned char *)"+-*/\\^<>=`~:.?@#&!%|"
-#define PROLOG_OP_STRING  (unsigned char *)"+-*/\\^<>=`~:.?@#&"
 #define DEFAULT_OP_PLUS   (unsigned char *)"()[]{}"
 #define DEFAULT_ID_STRING (unsigned char *)"\005\007_" /* or equiv. "A-Za-z0-9_" */
 
@@ -129,7 +123,6 @@ typedef struct SPECS {
     struct MODE User, Meta;
     struct COMMENT *comments;
     struct SPECS *stack_next;
-    int preservelf;
     CHARSET_SUBSET op_set, ext_op_set, id_set;
 } SPECS;
 
@@ -281,19 +274,8 @@ void display_version(void) {
 
 void usage(void) {
     fprintf(stderr,"Usage : gpp [-Dname=val ...]\n");
-    fprintf(stderr,"            [-n] [-C | -T | -H | -X | -P | -U ... [-M ...]] [+c<n> str1 str2]\n");
-    fprintf(stderr,"            [+s<n> str1 str2 c] [long options]\n\n");
+    fprintf(stderr,"            [long options]\n\n");
     fprintf(stderr,"      default:    #define x y           macro(arg,...)\n");
-    fprintf(stderr," -C : maximum cpp compatibility (includes -n, +c, +s, ...)\n");
-    fprintf(stderr," -T : TeX-like    \\define{x}{y}         \\macro{arg}{...}\n");
-    fprintf(stderr," -H : HTML-like   <#define x|y>         <#macro arg|...>\n");
-    fprintf(stderr," -X : XHTML-like  <#define x|y/>        <#macro arg|.../>\n");
-    fprintf(stderr," -P : prolog compatible cpp-like mode\n");
-    fprintf(stderr," -U : user-defined syntax (specified in 9 following args; see manual)\n");
-    fprintf(stderr," -M : user-defined syntax for meta-macros (specified in 7 following args)\n\n");
-    fprintf(stderr," -n : send LF characters serving as macro terminators to output\n");
-    fprintf(stderr," +c : use next 2 args as comment start and comment end sequences\n");
-    fprintf(stderr," +s : use next 3 args as string start, end and quote character\n\n");
     fprintf(stderr," Long options:\n");
     fprintf(stderr," --warninglevel n : set warning level\n");
     fprintf(stderr," --version : display version information and exit\n");
@@ -916,8 +898,6 @@ int matchEndSequence(const char *s, int *pos) {
         return 1;
     if (!matchSequence(s, pos))
         return 0;
-    if (S->preservelf && isWhite(getChar(*pos - 1)))
-        (*pos)--;
     return 1;
 }
 
@@ -1100,10 +1080,9 @@ void shiftIn(int l) {
 
 void initthings(int argc, char **argv) {
     char **arg, *s;
-    int i, ishelp, ismode, hasmeta, usrmode;
+    int i, ishelp, hasmeta, usrmode;
 
     DefaultOp = MakeCharsetSubset(DEFAULT_OP_STRING);
-    PrologOp = MakeCharsetSubset(PROLOG_OP_STRING);
     DefaultExtOp = MakeCharsetSubset(DEFAULT_OP_PLUS);
     DefaultId = MakeCharsetSubset(DEFAULT_ID_STRING);
 
@@ -1116,10 +1095,15 @@ void initthings(int argc, char **argv) {
     S->Meta = CMeta;
     S->comments = NULL;
     S->stack_next = NULL;
-    S->preservelf = 0;
     S->op_set = DefaultOp;
     S->ext_op_set = DefaultExtOp;
     S->id_set = DefaultId;
+
+    add_comment(S, "ccc", my_strdup("/*"), my_strdup("*/"), 0, 0);
+    add_comment(S, "ccc", my_strdup("//"), my_strdup("\n"), 0, 0);
+    add_comment(S, "ccc", my_strdup("\\\003"), my_strdup(""), 0, 0);
+    add_comment(S, "sss", my_strdup("\""), my_strdup("\""), '\\', '\n');
+    add_comment(S, "sss", my_strdup("'"), my_strdup("'"), '\\', '\n');
 
     C = malloc(sizeof *C);
     C->read_stdin = 1;
@@ -1128,7 +1112,7 @@ void initthings(int argc, char **argv) {
     C->out = malloc(sizeof *(C->out));
     C->out->bufsize = 0;
     C->lineno = 1;
-    ismode = ishelp = hasmeta = usrmode = 0;
+    ishelp = hasmeta = usrmode = 0;
     C->bufsize = 80;
     C->len = 0;
     C->buf = C->malloced_buf = malloc(C->bufsize);
@@ -1193,79 +1177,11 @@ void initthings(int argc, char **argv) {
                 add_comment(S, s, strNl(*(arg - 2)), strNl(*(arg - 1)), **arg,
                         0);
                 break;
-            case 'n':
-                S->preservelf = 0;
-                break;
             default:
                 ishelp = 1;
             }
         } else
             switch ((*arg)[1]) {
-            case 'C':
-                ishelp |= ismode | hasmeta | usrmode;
-                ismode = 1;
-                S->User = KUser;
-                S->Meta = KMeta;
-                S->preservelf = 1;
-                add_comment(S, "ccc", my_strdup("/*"), my_strdup("*/"), 0, 0);
-                add_comment(S, "ccc", my_strdup("//"), my_strdup("\n"), 0, 0);
-                add_comment(S, "ccc", my_strdup("\\\n"), my_strdup(""), 0, 0);
-                add_comment(S, "sss", my_strdup("\""), my_strdup("\""), '\\',
-                        '\n');
-                add_comment(S, "sss", my_strdup("'"), my_strdup("'"), '\\',
-                        '\n');
-                break;
-            case 'P':
-                ishelp |= ismode | hasmeta | usrmode;
-                ismode = 1;
-                S->User = KUser;
-                S->Meta = KMeta;
-                S->preservelf = 1;
-                S->op_set = PrologOp;
-                add_comment(S, "css", my_strdup("\213/*"), my_strdup("*/"), 0,
-                        0); /* \!o */
-                add_comment(S, "cii", my_strdup("\\\n"), my_strdup(""), 0, 0);
-                add_comment(S, "css", my_strdup("%"), my_strdup("\n"), 0, 0);
-                add_comment(S, "sss", my_strdup("\""), my_strdup("\""), 0,
-                        '\n');
-                add_comment(S, "sss", my_strdup("\207'"), my_strdup("'"), 0,
-                        '\n'); /* \!# */
-                break;
-            case 'T':
-                ishelp |= ismode | hasmeta | usrmode;
-                ismode = 1;
-                S->User = S->Meta = Tex;
-                break;
-            case 'H':
-                ishelp |= ismode | hasmeta | usrmode;
-                ismode = 1;
-                S->User = S->Meta = Html;
-                break;
-            case 'X':
-                ishelp |= ismode | hasmeta | usrmode;
-                ismode = 1;
-                S->User = S->Meta = XHtml;
-                break;
-            case 'U':
-                ishelp |= ismode | usrmode;
-                usrmode = 1;
-                if (!readModeDescription(arg, &(S->User), 0)) {
-                    usage();
-                    exit(EXIT_FAILURE);
-                }
-                arg += 9;
-                if (!hasmeta)
-                    S->Meta = S->User;
-                break;
-            case 'M':
-                ishelp |= ismode | hasmeta;
-                hasmeta = 1;
-                if (!readModeDescription(arg, &(S->Meta), 1)) {
-                    usage();
-                    exit(EXIT_FAILURE);
-                }
-                arg += 7;
-                break;
             case 'D':
                 if ((*arg)[2] == 0) {
                     if (!(*(++arg))) {
@@ -1277,17 +1193,6 @@ void initthings(int argc, char **argv) {
                     s = strNl0((*arg) + 2);
                 parseCmdlineDefine(s);
                 free(s);
-                break;
-            case 'n':
-                S->preservelf = 1;
-                break;
-            case 'c':
-            case 's':
-                if (!(*(++arg))) {
-                    usage();
-                    exit(EXIT_FAILURE);
-                }
-                delete_comment(S, strNl(*arg));
                 break;
             default:
                 ishelp = 1;
@@ -1916,50 +1821,6 @@ char *remove_comments(int start, int end, int cmtmode) {
     return s;
 }
 
-void SetStandardMode(struct SPECS *P, const char *opt) {
-    P->op_set = DefaultOp;
-    P->ext_op_set = DefaultExtOp;
-    P->id_set = DefaultId;
-    FreeComments(P);
-    if (!strcmp(opt, "C") || !strcmp(opt, "cpp")) {
-        P->User = KUser;
-        P->Meta = KMeta;
-        P->preservelf = 1;
-        add_comment(P, "ccc", my_strdup("/*"), my_strdup("*/"), 0, 0);
-        add_comment(P, "ccc", my_strdup("//"), my_strdup("\n"), 0, 0);
-        add_comment(P, "ccc", my_strdup("\\\n"), my_strdup(""), 0, 0);
-        add_comment(P, "sss", my_strdup("\""), my_strdup("\""), '\\', '\n');
-        add_comment(P, "sss", my_strdup("'"), my_strdup("'"), '\\', '\n');
-    } else if (!strcmp(opt, "TeX") || !strcmp(opt, "tex")) {
-        P->User = Tex;
-        P->Meta = Tex;
-        P->preservelf = 0;
-    } else if (!strcmp(opt, "HTML") || !strcmp(opt, "html")) {
-        P->User = Html;
-        P->Meta = Html;
-        P->preservelf = 0;
-    } else if (!strcmp(opt, "XHTML") || !strcmp(opt, "xhtml")) {
-        P->User = XHtml;
-        P->Meta = XHtml;
-        P->preservelf = 0;
-    } else if (!strcmp(opt, "default")) {
-        P->User = CUser;
-        P->Meta = CMeta;
-        P->preservelf = 0;
-    } else if (!strcmp(opt, "Prolog") || !strcmp(opt, "prolog")) {
-        P->User = KUser;
-        P->Meta = KMeta;
-        P->preservelf = 1;
-        P->op_set = PrologOp;
-        add_comment(P, "css", my_strdup("\213/*"), my_strdup("*/"), 0, 0); /* \!o */
-        add_comment(P, "cii", my_strdup("\\\n"), my_strdup(""), 0, 0);
-        add_comment(P, "css", my_strdup("%"), my_strdup("\n"), 0, 0);
-        add_comment(P, "sss", my_strdup("\""), my_strdup("\""), 0, '\n');
-        add_comment(P, "sss", my_strdup("\207'"), my_strdup("'"), 0, '\n'); /* \!# */
-    } else
-        bug("unknown standard mode");
-}
-
 void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
     struct SPECS *P;
     char *s, *p, *opt;
@@ -2048,9 +1909,7 @@ void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
         free(S->stack_next);
         S->stack_next = P;
     } else if (idequal(C->buf + p1start, p1end - p1start, "standard")) {
-        if ((opt == NULL )||nargs)
-            bug("syntax error in #mode standard");
-        SetStandardMode(S->stack_next, opt);
+        bug("#mode standard not allowed");
     } else if (idequal(C->buf + p1start, p1end - p1start, "user")) {
         if ((opt != NULL )||(nargs!=9))bug("#mode user requires 9 arguments");
         S->stack_next->User.mStart=my_strdup(args[0]);
@@ -2078,10 +1937,7 @@ void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
         }
     }
     else if (idequal(C->buf+p1start,p1end-p1start,"preservelf")) {
-        if ((opt==NULL)||nargs) bug("syntax error in #mode preservelf");
-        if (!strcmp(opt,"1")||!my_strcasecmp(opt,"on")) S->stack_next->preservelf=1;
-        else if (!strcmp(opt,"0")||!my_strcasecmp(opt,"off")) S->stack_next->preservelf=0;
-        else bug("#mode preservelf requires on/off argument");
+        bug("#mode preservelf not allowed");
     }
     else if (idequal(C->buf+p1start,p1end-p1start,"nocomment")
             ||idequal(C->buf+p1start,p1end-p1start,"nostring")) {
@@ -2185,7 +2041,6 @@ int ParsePossibleMeta(void) {
     /* #MODE magic : define "..." to be C-style strings */
     if (id == 14) {
         PushSpecs(S);
-        S->preservelf = 1;
         delete_comment(S, my_strdup("\""));
         add_comment(S, "sss", my_strdup("\""), my_strdup("\""), '\\', '\n');
     }
