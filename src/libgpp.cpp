@@ -172,9 +172,12 @@ namespace
         int defined_in_comment;
     };
 
+    using Output_Character_Fn = auto (char ch, void* data) -> void;
     struct Output_Context {
         char *buf;
         int len, bufsize;
+        Output_Character_Fn* output_char;
+        void* output_char_data;
     };
 
     struct Input_Context {
@@ -843,16 +846,11 @@ namespace
             add_comment(S, "sss", my_strdup("'"), my_strdup("'"), '\\', '\n');
 
             C = XX malloc(sizeof *C);
-            C->read_stdin = 1;
             C->argc = 0;
             C->argv = nullptr;
             C->out = XX malloc(sizeof *(C->out));
             C->out->bufsize = 0;
             C->lineno = 1;
-            C->bufsize = 80;
-            C->len = 0;
-            C->buf = C->malloced_buf = XX malloc(C->bufsize);
-            C->eof = 0;
             C->namedargs = nullptr;
             C->in_comment = 0;
             C->ambience = FLAG_TEXT;
@@ -882,8 +880,33 @@ namespace
             }
         }
 
-        auto preprocess_stdin_to_stdout()
+        auto preprocess_stdin_to_stdout() -> void
         {
+            C->read_stdin = 1;
+            C->eof = 0;
+            C->bufsize = 80;
+            C->len = 0;
+            C->buf = C->malloced_buf = XX malloc(C->bufsize);
+            C->out->output_char = [] (char x, void*) { putchar(x); };
+            process_context();
+        }
+
+        auto preprocess_to_buffer(std::string const& source, std::string& output) -> void
+        {
+            C->read_stdin = 0;
+            C->eof = 0;
+            C->len = XX (source.size() + 1);    // prepend '\n'
+            C->bufsize = C->len + 1;            // count in '\0'
+            C->buf = C->malloced_buf = XX malloc(C->bufsize);
+            C->buf[0] = '\n';
+            C->buf[C->len] = '\0';
+            memcpy(C->buf + 1, source.data(), source.size());
+
+            C->out->output_char_data = &output;
+            C->out->output_char = [] (char x, void* raw_output) {
+                auto& output = *(std::string*)(raw_output);
+                output += x;
+            };
             process_context();
         }
 
@@ -971,7 +994,7 @@ namespace
                 C->out->buf[C->out->len++] = c;
             } else {
                 if (c != 13) {
-                    putchar(c);
+                    C->out->output_char(c, C->out->output_char_data);
                 }
             }
         }
@@ -1500,6 +1523,8 @@ namespace
             C->out->buf = XX malloc(80);
             C->out->len = 0;
             C->out->bufsize = 80;
+            C->out->output_char = T->out->output_char;
+            C->out->output_char_data = T->out->output_char_data;
             C->lineno = T->lineno;
             C->bufsize = l + 2;
             C->len = l + 1;
@@ -2306,6 +2331,19 @@ namespace libgpp
     {
         Preprocessor pp;
         pp.preprocess_stdin_to_stdout();
+    }
+
+    auto preprocess_to_buffer(std::string const& source, std::string& output) -> void
+    {
+        Preprocessor pp;
+        return pp.preprocess_to_buffer(source, output);
+    }
+
+    auto preprocess(std::string const& source) -> std::string
+    {
+        std::string result;
+        preprocess_to_buffer(source, result);
+        return result;
     }
 }
 

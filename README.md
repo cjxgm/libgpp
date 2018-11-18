@@ -48,3 +48,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - `gpp.cpp` is now split into `libgpp` and `gpp` (which calls into `libgpp`).
 
+- Support process string to string in memory.
+
