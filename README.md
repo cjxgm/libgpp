@@ -44,4 +44,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
   - Convert `function(void)` to `function()`.
   - Do not leak heap memory before quitting.
   - Throws `std::runtime_error` when encountering `bug(...)`.
+  - Wrap everything into a struct and anonymous namespaces.
 
