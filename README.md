@@ -40,4 +40,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
   - Removed `typedef`s and `struct` prefixes.
   - Use `std::uint32_t` instead of `unsigned long`.
+  - Convert to a consistent naming style.
 
