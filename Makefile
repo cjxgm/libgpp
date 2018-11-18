@@ -10,7 +10,7 @@ rebuild:
 	@$(MAKE) all
 run: all
 	printf "#eval 1+1\n\n" | build/gpp
-build/gpp: src/gpp.cpp build/
+build/gpp: src/libgpp.cpp build/
 	$(CXX) -o $@ $< $(CXXSTD) $(CXXFLAGS)
 
 %/:
