@@ -34,3 +34,7 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - Removed "Preserve LF". `\n` will never be preserved.
 
+### v1.1.0
+
+- Convert to C++14 compilers.
+

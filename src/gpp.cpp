@@ -30,21 +30,57 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <utility>      // for std::move
+
+namespace
+{
+    namespace autocast
+    {
+        // Autocast is written by Giumo Clanjor and
+        // has been contributed to the public domain.
+        // Inspired by JAI's `xx` operator.
+        #define AUTOCAST      ::autocast::Caster_Builder{} /
+
+        template <class T>
+        struct Caster
+        {
+            constexpr Caster(T value): value{std::move(value)} {}
+
+            template <class Target>
+            constexpr operator Target () && { return Target(std::move(value)); }
+
+            template <class Target>
+            constexpr operator Target () const& { return Target(value); }
+
+        private:
+            T value;
+        };
+
+        struct Caster_Builder
+        {
+            template <class T>
+            constexpr auto operator / (T value) const { return Caster<T>{value}; }
+        };
+    }
+
+    #define XX      AUTOCAST
+}
+
 #define STACKDEPTH 50
 #define MAXARGS 100
 
 #define MAX_GPP_NUM_SIZE 15
 
 typedef struct MODE {
-    char *mStart; /* before macro name */
-    char *mEnd; /* end macro without arg */
-    char *mArgS; /* start 1st argument */
-    char *mArgSep; /* separate arguments */
-    char *mArgE; /* end last argument */
-    char *mArgRef; /* how to refer to arguments in a def */
+    char const* mStart; /* before macro name */
+    char const* mEnd; /* end macro without arg */
+    char const* mArgS; /* start 1st argument */
+    char const* mArgSep; /* separate arguments */
+    char const* mArgE; /* end last argument */
+    char const* mArgRef; /* how to refer to arguments in a def */
     char quotechar; /* quote next char */
-    char *stackchar; /* characters to stack */
-    char *unstackchar; /* characters to unstack */
+    char const* stackchar; /* characters to stack */
+    char const* unstackchar; /* characters to unstack */
 } MODE;
 
 /* translation for delimiters :
@@ -189,7 +225,7 @@ char *ArithmEval(int pos1, int pos2);
  */
 static char *my_strdup(const char *s) {
     size_t len = strlen(s) + 1;
-    char *newstr = malloc(len);
+    char *newstr = XX malloc(len);
     return newstr ? (char *) memcpy(newstr, s, len) : NULL ;
 }
 static int my_strcasecmp(const char *s, const char *s2) {
@@ -218,20 +254,20 @@ struct SPECS *CloneSpecs(const struct SPECS *Q) {
     struct SPECS *P;
     struct COMMENT *x, *y;
 
-    P = malloc(sizeof *P);
+    P = XX malloc(sizeof *P);
     if (P == NULL )
         bug("Out of memory.");
     memcpy(P, Q, sizeof(struct SPECS));
     P->stack_next = NULL;
     if (Q->comments != NULL )
-        P->comments = malloc(sizeof *(P->comments));
+        P->comments = XX malloc(sizeof *(P->comments));
     for (x = Q->comments, y = P->comments; x != NULL ;
             x = x->next, y = y->next) {
         memcpy(y, x, sizeof(struct COMMENT));
         y->start = my_strdup(x->start);
         y->end = my_strdup(x->end);
         if (x->next != NULL )
-            y->next = malloc(sizeof *(y->next));
+            y->next = XX malloc(sizeof *(y->next));
     }
     return P;
 }
@@ -314,11 +350,11 @@ int isWhite(char c) {
 void newmacro(const char *s, int len, int hasspecs) {
     if (nmacros == nalloced) {
         nalloced = 2 * nalloced + 1;
-        macros = realloc(macros, nalloced * sizeof *macros);
+        macros = XX realloc(macros, nalloced * sizeof *macros);
         if (macros == NULL )
             bug("Out of memory");
     }
-    macros[nmacros].username = malloc(len + 1);
+    macros[nmacros].username = XX malloc(len + 1);
     strncpy(macros[nmacros].username, s, len);
     macros[nmacros].username[len] = 0;
     macros[nmacros].argnames = NULL;
@@ -353,7 +389,7 @@ void lookupArgRefs(int n) {
 char *strNl0(const char *s) /* replace "\\n" by "\n" in a cmd-line arg */
 {
     char *t, *u;
-    t = malloc(strlen(s) + 1);
+    t = XX malloc(strlen(s) + 1);
     u = t;
     while (*s != 0) {
         if ((*s == '\\') && (s[1] == 'n')) {
@@ -372,7 +408,7 @@ char *strNl(const char *s) /* the same but with whitespace specifier handling */
 {
     char *t, *u;
     int neg;
-    t = malloc(strlen(s) + 1);
+    t = XX malloc(strlen(s) + 1);
     u = t;
     if (!isDelim(*s))
         bug("character not allowed to start a syntax specifier");
@@ -568,10 +604,10 @@ void parseCmdlineDefine(const char *s) {
                 bug("invalid syntax in -D declaration");
             if (i > l)
                 argc++;
-            macros[nmacros].argnames = realloc(macros[nmacros].argnames,
+            macros[nmacros].argnames = XX realloc(macros[nmacros].argnames,
                     (argc + 1) * sizeof(char *));
             if (i > l) {
-                macros[nmacros].argnames[argc - 1] = malloc(i - l + 1);
+                macros[nmacros].argnames[argc - 1] = XX malloc(i - l + 1);
                 memcpy(macros[nmacros].argnames[argc - 1], s + l, i - l);
                 macros[nmacros].argnames[argc - 1][i - l] = 0;
             }
@@ -663,7 +699,7 @@ void add_comment(struct SPECS *S, const char *specif, char *start, char *end,
         }
 
     if (p == NULL ) {
-        p = malloc(sizeof *p);
+        p = XX malloc(sizeof *p);
         p->next = S->comments;
         S->comments = p;
     }
@@ -703,7 +739,7 @@ void outchar(char c) {
     if (C->out->bufsize) {
         if (C->out->len + 1 == C->out->bufsize) {
             C->out->bufsize = C->out->bufsize * 2;
-            C->out->buf = realloc(C->out->buf, C->out->bufsize);
+            C->out->buf = XX realloc(C->out->buf, C->out->bufsize);
             if (C->out->buf == NULL )
                 bug("Out of memory");
         }
@@ -735,7 +771,7 @@ void extendBuf(int pos) {
     char *p;
     if (C->bufsize <= pos) {
         C->bufsize += pos; /* approx double */
-        p = malloc(C->bufsize);
+        p = XX malloc(C->bufsize);
         memcpy(p, C->buf, C->len);
         free(C->malloced_buf);
         C->malloced_buf = C->buf = p;
@@ -977,7 +1013,7 @@ CHARSET_SUBSET MakeCharsetSubset(unsigned char *s) {
     int i;
     unsigned char c;
 
-    x = malloc(CHARSET_SUBSET_LEN * sizeof(unsigned long));
+    x = XX malloc(CHARSET_SUBSET_LEN * sizeof(unsigned long));
     for (i = 0; i < CHARSET_SUBSET_LEN; i++)
         x[i] = 0;
     while (*s != 0) {
@@ -1090,8 +1126,8 @@ void shiftIn(int l) {
     }
 }
 
-void initthings(char **argv) {
-    char **arg, *s;
+void initthings(char const* const* argv) {
+    char const* const* arg;
     int i, ishelp, hasmeta, usrmode;
 
     DefaultOp = MakeCharsetSubset(DEFAULT_OP_STRING);
@@ -1100,9 +1136,9 @@ void initthings(char **argv) {
 
     nmacros = 0;
     nalloced = 31;
-    macros = malloc(nalloced * sizeof *macros);
+    macros = XX malloc(nalloced * sizeof *macros);
 
-    S = malloc(sizeof *S);
+    S = XX malloc(sizeof *S);
     S->User = CUser;
     S->Meta = CMeta;
     S->comments = NULL;
@@ -1117,17 +1153,17 @@ void initthings(char **argv) {
     add_comment(S, "sss", my_strdup("\""), my_strdup("\""), '\\', '\n');
     add_comment(S, "sss", my_strdup("'"), my_strdup("'"), '\\', '\n');
 
-    C = malloc(sizeof *C);
+    C = XX malloc(sizeof *C);
     C->read_stdin = 1;
     C->argc = 0;
     C->argv = NULL;
-    C->out = malloc(sizeof *(C->out));
+    C->out = XX malloc(sizeof *(C->out));
     C->out->bufsize = 0;
     C->lineno = 1;
     ishelp = hasmeta = usrmode = 0;
     C->bufsize = 80;
     C->len = 0;
-    C->buf = C->malloced_buf = malloc(C->bufsize);
+    C->buf = C->malloced_buf = XX malloc(C->bufsize);
     C->eof = 0;
     C->namedargs = NULL;
     C->in_comment = 0;
@@ -1156,8 +1192,8 @@ void initthings(char **argv) {
 
         if (**arg == '+') {
             switch ((*arg)[1]) {
-            case 'c':
-                s = (*arg) + 2;
+            case 'c': {
+                auto s = (*arg) + 2;
                 if (*s == 0)
                     s = "ccc";
                 if (!(*(++arg))) {
@@ -1170,8 +1206,9 @@ void initthings(char **argv) {
                 }
                 add_comment(S, s, strNl(*(arg - 1)), strNl(*arg), 0, 0);
                 break;
-            case 's':
-                s = (*arg) + 2;
+            }
+            case 's': {
+                auto s = (*arg) + 2;
                 if (*s == 0)
                     s = "sss";
                 if (!(*(++arg))) {
@@ -1186,15 +1223,16 @@ void initthings(char **argv) {
                     usage();
                     exit(EXIT_FAILURE);
                 }
-                add_comment(S, s, strNl(*(arg - 2)), strNl(*(arg - 1)), **arg,
-                        0);
+                add_comment(S, s, strNl(*(arg - 2)), strNl(*(arg - 1)), **arg, 0);
                 break;
+            }
             default:
                 ishelp = 1;
             }
         } else
             switch ((*arg)[1]) {
-            case 'D':
+            case 'D': {
+                auto s = (char*) nullptr;
                 if ((*arg)[2] == 0) {
                     if (!(*(++arg))) {
                         usage();
@@ -1206,6 +1244,7 @@ void initthings(char **argv) {
                 parseCmdlineDefine(s);
                 free(s);
                 break;
+            }
             default:
                 ishelp = 1;
             }
@@ -1437,21 +1476,21 @@ char *ProcessText(const char *buf, int l, int ambience) {
     struct INPUTCONTEXT *T;
 
     if (l == 0) {
-        s = malloc(1);
+        s = XX malloc(1);
         s[0] = 0;
         return s;
     }
-    s = malloc(l + 2);
+    s = XX malloc(l + 2);
     s[0] = '\n';
     memcpy(s + 1, buf, l);
     s[l + 1] = 0;
     T = C;
-    C = malloc(sizeof *C);
-    C->out = malloc(sizeof *(C->out));
+    C = XX malloc(sizeof *C);
+    C->out = XX malloc(sizeof *(C->out));
     C->read_stdin = 0;
     C->argc = T->argc;
     C->argv = T->argv;
-    C->out->buf = malloc(80);
+    C->out->buf = XX malloc(80);
     C->out->len = 0;
     C->out->bufsize = 80;
     C->lineno = T->lineno;
@@ -1473,8 +1512,7 @@ char *ProcessText(const char *buf, int l, int ambience) {
     return s;
 }
 
-int SpliceInfix(const char *buf, int pos1, int pos2, char *sep, int *spl1,
-        int *spl2) {
+int SpliceInfix(const char *buf, int pos1, int pos2, char const* sep, int *spl1, int *spl2) {
     int pos, numpar, l;
     const char *p;
 
@@ -1777,7 +1815,7 @@ char *ArithmEval(int pos1, int pos2) {
     else {
         newmacro("defined", strlen("defined"), 1);
         macros[nmacros].macrolen = 0;
-        macros[nmacros].macrotext = malloc(1);
+        macros[nmacros].macrotext = XX malloc(1);
         macros[nmacros].macrotext[0] = 0;
         macros[nmacros].nnamedargs = -2; /* trademark of the defined(...) macro */
         nmacros++;
@@ -1795,7 +1833,7 @@ char *ArithmEval(int pos1, int pos2) {
 
     if (!DoArithmEval(s, 0, strlen(s), &i))
         return s; /* couldn't compute */
-    t = malloc(MAX_GPP_NUM_SIZE);
+    t = XX malloc(MAX_GPP_NUM_SIZE);
     sprintf(t, "%d", i);
     free(s);
     return t;
@@ -1818,7 +1856,7 @@ int comment_or_white(int start, int end, int cmtmode) {
 char *remove_comments(int start, int end, int cmtmode) {
     char *s, *t;
 
-    t = s = malloc(end - start + 1);
+    t = s = XX malloc(end - start + 1);
     while (start < end) {
         SkipPossibleComments(&start, cmtmode, 1);
         if (start < end) {
@@ -1835,9 +1873,10 @@ char *remove_comments(int start, int end, int cmtmode) {
 
 void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
     struct SPECS *P;
-    char *s, *p, *opt;
+    char *s, *p;
+    char const* opt;
     int nargs, check_isdelim;
-    char *args[10]; /* can't have more than 10 arguments */
+    char const* args[10]; /* can't have more than 10 arguments */
 
     whiteout(&p1start, &p1end);
     if ((p1start == p1end) || (identifierEnd(p1start) != p1end))
@@ -2096,7 +2135,7 @@ int ParsePossibleMeta(void) {
                 /* define with one empty argument */
                 if ((argc == 1) && (arge[0] == argb[0]))
                     argc = 0;
-                macros[nmacros].argnames = malloc((argc + 1) * sizeof(char *));
+                macros[nmacros].argnames = XX malloc((argc + 1) * sizeof(char *));
                 macros[nmacros].argnames[argc] = NULL;
             }
             macros[nmacros].nnamedargs = argc;
@@ -2104,7 +2143,7 @@ int ParsePossibleMeta(void) {
                 if ((argb[j] == arge[j]) || (identifierEnd(argb[j]) != arge[j]))
                     bug(
                             "#define with named args needs identifiers as arg names");
-                macros[nmacros].argnames[j] = malloc(arge[j] - argb[j] + 1);
+                macros[nmacros].argnames[j] = XX malloc(arge[j] - argb[j] + 1);
                 memcpy(macros[nmacros].argnames[j], C->buf + argb[j],
                         arge[j] - argb[j]);
                 macros[nmacros].argnames[j][arge[j] - argb[j]] = 0;
@@ -2205,7 +2244,7 @@ int ParsePossibleMeta(void) {
                 /* define with one empty argument */
                 if ((argc == 1) && (arge[0] == argb[0]))
                     argc = 0;
-                macros[nmacros].argnames = malloc((argc + 1) * sizeof(char *));
+                macros[nmacros].argnames = XX malloc((argc + 1) * sizeof(char *));
                 macros[nmacros].argnames[argc] = NULL;
             }
             macros[nmacros].nnamedargs = argc;
@@ -2213,7 +2252,7 @@ int ParsePossibleMeta(void) {
                 if ((argb[j] == arge[j]) || (identifierEnd(argb[j]) != arge[j]))
                     bug(
                             "#defeval with named args needs identifiers as arg names");
-                macros[nmacros].argnames[j] = malloc(arge[j] - argb[j] + 1);
+                macros[nmacros].argnames[j] = XX malloc(arge[j] - argb[j] + 1);
                 memcpy(macros[nmacros].argnames[j], C->buf + argb[j],
                         arge[j] - argb[j]);
                 macros[nmacros].argnames[j][arge[j] - argb[j]] = 0;
@@ -2407,7 +2446,7 @@ int ParsePossibleUser(void) {
         argv[i] = ProcessText(C->buf + argb[i], arge[i] - argb[i], FLAG_USER);
     /* process macro text */
     T = C;
-    C = malloc(sizeof *C);
+    C = XX malloc(sizeof *C);
     C->out = T->out;
     C->read_stdin = 0;
     C->argc = argc;
@@ -2423,7 +2462,7 @@ int ParsePossibleUser(void) {
                 + (argc - 1) * strlen(macros[id].define_specs->User.mArgSep);
         for (i = 0; i < argc; i++)
             l += strlen(argv[i]);
-        C->buf = C->malloced_buf = malloc(l);
+        C->buf = C->malloced_buf = XX malloc(l);
         l = strlen(macros[id].macrotext) + 1;
         C->buf[0] = '\n';
         strcpy(C->buf + 1, macros[id].macrotext);
@@ -2438,7 +2477,7 @@ int ParsePossibleUser(void) {
         strcat(C->buf, macros[id].define_specs->User.mArgE);
         C->may_have_args = 0;
     } else {
-        C->buf = C->malloced_buf = malloc(strlen(macros[id].macrotext) + 2);
+        C->buf = C->malloced_buf = XX malloc(strlen(macros[id].macrotext) + 2);
         C->buf[0] = '\n';
         strcpy(C->buf + 1, macros[id].macrotext);
     }
