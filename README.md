@@ -38,3 +38,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - Convert to C++14 compilers.
 
+  - Removed `typedef`s and `struct` prefixes.
+

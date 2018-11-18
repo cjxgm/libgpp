@@ -70,7 +70,7 @@ namespace
 
 #define MAX_GPP_NUM_SIZE 15
 
-typedef struct MODE {
+struct MODE {
     char const* mStart;         // before macro name
     char const* mEnd;           // end macro without arg
     char const* mArgS;          // start 1st argument
@@ -80,7 +80,7 @@ typedef struct MODE {
     char quotechar;             // quote next char
     char const* stackchar;      // characters to stack
     char const* unstackchar;    // characters to unstack
-} MODE;
+};
 
 // translation for delimiters :
 //
@@ -97,8 +97,8 @@ typedef struct MODE {
 // > \014 = \O = operator or ()[]{}              \214 = \!O
 
 // -                 st        end   args   sep    arge ref  quot  stk  unstk
-struct MODE CUser = {"",       "",   "(",   ",",   ")", "#", '\\', "(", ")" };
-struct MODE CMeta = {"#",      "\n", "\001","\001","\n","#", '\\', "(", ")" };
+MODE CUser = {"",       "",   "(",   ",",   ")", "#", '\\', "(", ")" };
+MODE CMeta = {"#",      "\n", "\001","\001","\n","#", '\\', "(", ")" };
 
 #define DEFAULT_OP_STRING (unsigned char *)"+-*/\\^<>=`~:.?@#&!%|"
 #define DEFAULT_OP_PLUS   (unsigned char *)"()[]{}"
@@ -107,18 +107,18 @@ struct MODE CMeta = {"#",      "\n", "\001","\001","\n","#", '\\', "(", ")" };
 // here we assume that longs are at least 32 bit... if not, change this !
 #define LOG_LONG_BITS 5
 #define CHARSET_SUBSET_LEN (256 >> LOG_LONG_BITS)
-typedef unsigned long *CHARSET_SUBSET;
+using CHARSET_SUBSET = unsigned long *;
 
 CHARSET_SUBSET DefaultOp, DefaultExtOp, PrologOp, DefaultId;
 
-typedef struct COMMENT {
+struct COMMENT {
     char *start;        // how the comment/string starts
     char *end;          // how it ends
     char quote;         // how to prevent it from ending
     char warn;          // a character that shouldn't be in there
     int flags[3];       // meta, user, text
-    struct COMMENT *next;
-} COMMENT;
+    COMMENT *next;
+};
 
 #define OUTPUT_TEXT     0x1   // what's inside will be output
 #define OUTPUT_DELIM    0x2   // the delimiters will be output
@@ -158,32 +158,32 @@ typedef struct COMMENT {
 // #defeval, #mode) ; #if and #eval should be ok ;
 // #ifeq will always fail while #ifneq will always succeed ;
 
-typedef struct SPECS {
-    struct MODE User, Meta;
-    struct COMMENT *comments;
-    struct SPECS *stack_next;
+struct SPECS {
+    MODE User, Meta;
+    COMMENT *comments;
+    SPECS *stack_next;
     CHARSET_SUBSET op_set, ext_op_set, id_set;
-} SPECS;
+};
 
-struct SPECS *S;
+SPECS *S;
 
-typedef struct MACRO {
+struct MACRO {
     char *username, *macrotext, **argnames;
     int macrolen, nnamedargs;
-    struct SPECS *define_specs;
+    SPECS *define_specs;
     int defined_in_comment;
-} MACRO;
+};
 
-struct MACRO *macros;
+MACRO *macros;
 int nmacros, nalloced;
 short WarningLevel = 2;
 
-typedef struct OUTPUTCONTEXT {
+struct OUTPUTCONTEXT {
     char *buf;
     int len, bufsize;
-} OUTPUTCONTEXT;
+};
 
-typedef struct INPUTCONTEXT {
+struct INPUTCONTEXT {
     char *buf;
     char *malloced_buf; // what was actually malloc-ed (buf may have shifted)
     int len, bufsize;
@@ -192,14 +192,14 @@ typedef struct INPUTCONTEXT {
     int argc;
     char **argv;
     char **namedargs;
-    struct OUTPUTCONTEXT *out;
+    OUTPUTCONTEXT *out;
     int eof;
     int in_comment;
     int ambience; // FLAG_TEXT, FLAG_USER or FLAG_META
     int may_have_args;
-} INPUTCONTEXT;
+};
 
-struct INPUTCONTEXT *C;
+INPUTCONTEXT *C;
 
 int commented[STACKDEPTH], iflevel;
 // commented = 0: output, 1: not output,
@@ -247,20 +247,20 @@ void warning(const char *s) {
     fprintf(stderr, "%d: warning: %s\n", C->lineno, s);
 }
 
-struct SPECS *CloneSpecs(const struct SPECS *Q) {
-    struct SPECS *P;
-    struct COMMENT *x, *y;
+SPECS *CloneSpecs(const SPECS *Q) {
+    SPECS *P;
+    COMMENT *x, *y;
 
     P = XX malloc(sizeof *P);
     if (P == NULL )
         bug("Out of memory.");
-    memcpy(P, Q, sizeof(struct SPECS));
+    memcpy(P, Q, sizeof(SPECS));
     P->stack_next = NULL;
     if (Q->comments != NULL )
         P->comments = XX malloc(sizeof *(P->comments));
     for (x = Q->comments, y = P->comments; x != NULL ;
             x = x->next, y = y->next) {
-        memcpy(y, x, sizeof(struct COMMENT));
+        memcpy(y, x, sizeof(COMMENT));
         y->start = my_strdup(x->start);
         y->end = my_strdup(x->end);
         if (x->next != NULL )
@@ -269,8 +269,8 @@ struct SPECS *CloneSpecs(const struct SPECS *Q) {
     return P;
 }
 
-void FreeComments(struct SPECS *Q) {
-    struct COMMENT *p;
+void FreeComments(SPECS *Q) {
+    COMMENT *p;
 
     while (Q && Q->comments != NULL ) {
         p = Q->comments;
@@ -281,8 +281,8 @@ void FreeComments(struct SPECS *Q) {
     }
 }
 
-void PushSpecs(const struct SPECS *X) {
-    struct SPECS *P;
+void PushSpecs(const SPECS *X) {
+    SPECS *P;
 
     P = CloneSpecs(X);
     P->stack_next = S;
@@ -290,7 +290,7 @@ void PushSpecs(const struct SPECS *X) {
 }
 
 void PopSpecs(void) {
-    struct SPECS *P;
+    SPECS *P;
 
     P = S;
     S = P->stack_next;
@@ -624,7 +624,7 @@ void parseCmdlineDefine(const char *s) {
     macros[nmacros++].macrotext = my_strdup(s + l);
 }
 
-int readModeDescription(char **args, struct MODE *mode, int ismeta) {
+int readModeDescription(char **args, MODE *mode, int ismeta) {
     if (!(*(++args)))
         return 0;
     mode->mStart = strNl(*args);
@@ -680,9 +680,9 @@ int parse_comment_specif(char c) {
     }
 }
 
-void add_comment(struct SPECS *S, const char *specif, char *start, char *end,
+void add_comment(SPECS *S, const char *specif, char *start, char *end,
         char quote, char warn) {
-    struct COMMENT *p;
+    COMMENT *p;
 
     if (*start == 0)
         bug("Comment/string start delimiter must be non-empty");
@@ -711,8 +711,8 @@ void add_comment(struct SPECS *S, const char *specif, char *start, char *end,
     p->flags[FLAG_TEXT] = parse_comment_specif(specif[2]);
 }
 
-void delete_comment(struct SPECS *S, char *start) {
-    struct COMMENT *p, *q;
+void delete_comment(SPECS *S, char *start) {
+    COMMENT *p, *q;
 
     q = NULL;
     for (p = S->comments; p != NULL ; p = p->next) {
@@ -1290,7 +1290,7 @@ int findCommentEnd(const char *endseq, char quote, char warn, int pos,
 
 void SkipPossibleComments(int *pos, int cmtmode, int silentonly) {
     int found;
-    struct COMMENT *c;
+    COMMENT *c;
 
     if (C->in_comment)
         return;
@@ -1469,7 +1469,7 @@ int findMetaArgs(int start, int *p1b, int *p1e, int *p2b, int *p2e, int *endm,
 
 char *ProcessText(const char *buf, int l, int ambience) {
     char *s;
-    struct INPUTCONTEXT *T;
+    INPUTCONTEXT *T;
 
     if (l == 0) {
         s = XX malloc(1);
@@ -1797,7 +1797,7 @@ void delete_macro(int i) {
     }
     FreeComments(macros[i].define_specs);
     free(macros[i].define_specs);
-    memcpy(macros + i, macros + nmacros, sizeof(struct MACRO));
+    memcpy(macros + i, macros + nmacros, sizeof(MACRO));
 }
 
 char *ArithmEval(int pos1, int pos2) {
@@ -1868,7 +1868,7 @@ char *remove_comments(int start, int end, int cmtmode) {
 }
 
 void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
-    struct SPECS *P;
+    SPECS *P;
     char *s, *p;
     char const* opt;
     int nargs, check_isdelim;
@@ -2387,7 +2387,7 @@ int ParsePossibleUser(void) {
     int argc, id, i, l;
     char *argv[MAXARGS];
     int argb[MAXARGS], arge[MAXARGS];
-    struct INPUTCONTEXT *T;
+    INPUTCONTEXT *T;
 
     idstart = 1;
     id = 0;
@@ -2498,7 +2498,7 @@ int ParsePossibleUser(void) {
 void ParseText(void) {
     int l, cs, ce;
     char c, *s;
-    struct COMMENT *p;
+    COMMENT *p;
 
     // look for comments first
     if (!C->in_comment) {
