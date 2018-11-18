@@ -1,5 +1,6 @@
-CC = gcc
-CCFLAGS = -Wall -Wextra -O3
+CXX = g++
+CXXFLAGS = -Wall -Wextra -O3
+CXXSTD = -std=c++14
 
 all: build/gpp
 clean:
@@ -9,8 +10,8 @@ rebuild:
 	@$(MAKE) all
 run: all
 	printf "#eval 1+1\n\n" | build/gpp
-build/gpp: src/gpp.c build/
-	$(CC) -o $@ $< $(CCFLAGS)
+build/gpp: src/gpp.cpp build/
+	$(CXX) -o $@ $< $(CXXSTD) $(CXXFLAGS)
 
 %/:
 	@mkdir -p $@
