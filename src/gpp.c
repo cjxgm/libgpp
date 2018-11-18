@@ -1,9 +1,13 @@
 /* File:      gpp.c  -- generic preprocessor
-** Author:    Denis Auroux, Tristan Miller
-** Contact:   tristan@logological.org
+** Author:    Denis Auroux, Tristan Miller, Giumo Clanjor
+** Contact:   Giumo Clanjor <cjxgm2@gmail.com>
 **
-** Copyright (C) 1996, 1999, 2001 Denis Auroux
-** Copyright (C) 2003-2017 Tristan Miller
+** GPP:
+**   Copyright (C) 1996, 1999, 2001 Denis Auroux
+**   Copyright (C) 2003-2017 Tristan Miller
+**
+** libgpp:
+**   Copyright (C) 2018 Giumo Clanjor
 **
 ** This program is free software: you can redistribute it and/or
 ** modify it under the terms of the GNU Lesser General Public License as
@@ -19,7 +23,7 @@
 ** along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#define PACKAGE_STRING "GPP v2.26-60260df"
+#define PACKAGE_STRING "GPP v2.26-60260df libgpp v1.0.0"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -267,6 +271,7 @@ void display_version(void) {
     fprintf(stderr, PACKAGE_STRING "\n");
     fprintf(stderr, "Copyright (C) 1996-2001 Denis Auroux\n");
     fprintf(stderr, "Copyright (C) 2003-2017 Tristan Miller\n");
+    fprintf(stderr, "Copyright (C) 2018 Giumo Clanjor\n");
     fprintf(stderr,
             "This is free software; see the source for copying conditions.  There is NO\n"
             "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n");
