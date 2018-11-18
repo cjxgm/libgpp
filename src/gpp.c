@@ -496,6 +496,7 @@ char *strNl2(char *s, int check_delim) {
                     *u = s[1];
                     break;
                 }
+                // fallthrough
             default:
                 bug("unknown escape sequence in syntax specifier");
             }
@@ -824,6 +825,7 @@ int matchSequence(const char *s, int *pos) {
                     match = 0;
                     break;
                 }
+                // fallthrough
             case '\002':
                 i--;
                 do {
@@ -836,6 +838,7 @@ int matchSequence(const char *s, int *pos) {
                     match = 0;
                     break;
                 }
+                // fallthrough
             case '\004':
                 i--;
                 do {
@@ -928,6 +931,7 @@ int matchStartSequence(const char *s, int *pos) {
         case '\006':
             if ((c == ' ') || (c == '\t') || (c == '\n'))
                 break;
+            // fallthrough
         case '\005':
             match = ((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z'));
             break;
@@ -985,8 +989,10 @@ CHARSET_SUBSET MakeCharsetSubset(unsigned char *s) {
                 bug("special sequence not allowed in charset specification");
             case '\003':
                 AddToCharset(x, '\n');
+                // fallthrough
             case '\001':
                 AddToCharset(x, ' ');
+                // fallthrough
             case '\011':
                 AddToCharset(x, '\t');
                 break;
@@ -994,6 +1000,7 @@ CHARSET_SUBSET MakeCharsetSubset(unsigned char *s) {
                 AddToCharset(x, '\n');
                 AddToCharset(x, ' ');
                 AddToCharset(x, '\t');
+                // fallthrough
             case '\005':
                 for (c = 'A'; c <= 'Z'; c++)
                     AddToCharset(x, c);
@@ -1078,7 +1085,7 @@ void shiftIn(int l) {
     }
 }
 
-void initthings(int argc, char **argv) {
+void initthings(char **argv) {
     char **arg, *s;
     int i, ishelp, hasmeta, usrmode;
 
@@ -2517,7 +2524,8 @@ void ProcessContext(void) {
 }
 
 int main(int argc, char **argv) {
-    initthings(argc, argv);
+    (void) argc;
+    initthings(argv);
     ProcessContext();
     return EXIT_SUCCESS;
 }
