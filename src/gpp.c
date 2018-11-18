@@ -19,30 +19,13 @@
 ** along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-/* To compile under MS VC++, one must define WIN_NT */
-#if HAVE_CONFIG_H
-# include <config.h>
-#endif
-
-#ifdef WIN_NT              /* WIN NT settings */
-#define popen   _popen
-#define pclose  _pclose
-#define my_strdup  _strdup
-#define my_strcasecmp _stricmp
-#define SLASH '\\'
-#define DEFAULT_CRLF 1
-#else                      /* UNIX settings */
+#define PACKAGE_STRING "GPP v2.26-60260df"
 #define SLASH '/'
-#define DEFAULT_CRLF 0
-#endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#if HAVE_FNMATCH_H
-#  include <fnmatch.h>
-#endif
 #include <time.h>
 
 #define STACKDEPTH 50
@@ -168,7 +151,6 @@ int nmacros, nalloced;
 char *includedir[MAXINCL];
 int nincludedirs;
 int execallowed;
-int dosmode;
 int autoswitch;
 /* must be a format-like string that has % % % in it.
  The first % is replaced with line number, the second with "filename", and
@@ -236,26 +218,18 @@ void write_include_marker(FILE *f, int lineno, char *filename,
         const char *marker);
 void construct_include_directive_marker(char **include_directive_marker,
         const char *includemarker_input);
-void escape_backslashes(const char *instr, char **outstr);
 static void DoInclude(char *file_name);
 
 /*
  ** strdup() and my_strcasecmp() are not ANSI C, so here we define our own
  ** versions in case the compiler does not support them
  */
-#if ! HAVE_STRDUP
-inline char *my_strdup(const char *s);
-inline char *my_strdup(const char *s) {
+static char *my_strdup(const char *s) {
     size_t len = strlen(s) + 1;
     char *newstr = malloc(len);
     return newstr ? (char *) memcpy(newstr, s, len) : NULL ;
 }
-#else
-#  undef my_strdup
-#  define my_strdup strdup
-#endif
-#if ! HAVE_STRCASECMP
-int my_strcasecmp(const char *s, const char *s2) {
+static int my_strcasecmp(const char *s, const char *s2) {
     do {
         char c1 = tolower(*s);
         char c2 = tolower(*s2);
@@ -266,10 +240,6 @@ int my_strcasecmp(const char *s, const char *s2) {
     } while (*s++ && *s2++);
     return 0;
 }
-#else
-#  undef my_strcasecmp
-#  define my_strcasecmp strcasecmp
-#endif
 
 void bug(const char *s) {
     fprintf(stderr, "%s:%d: error: %s\n", C->filename, C->lineno, s);
@@ -343,7 +313,7 @@ void display_version(void) {
 }
 
 void usage(void) {
-    fprintf(stderr,"Usage : gpp [-{o|O} outfile] [-I/include/path] [-Dname=val ...] [-z] [-x] [-m]\n");
+    fprintf(stderr,"Usage : gpp [-{o|O} outfile] [-I/include/path] [-Dname=val ...] [-x] [-m]\n");
     fprintf(stderr,"            [-n] [-C | -T | -H | -X | -P | -U ... [-M ...]] [+c<n> str1 str2]\n");
     fprintf(stderr,"            [+s<n> str1 str2 c] [long options] [infile]\n\n");
     fprintf(stderr,"      default:    #define x y           macro(arg,...)\n");
@@ -356,7 +326,6 @@ void usage(void) {
     fprintf(stderr," -M : user-defined syntax for meta-macros (specified in 7 following args)\n\n");
     fprintf(stderr," -o : output to outfile\n");
     fprintf(stderr," -O : output to outfile and stdout\n");
-    fprintf(stderr," -z : line terminator is CR-LF (MS-DOS style)\n");
     fprintf(stderr," -x : enable #exec built-in macro\n");
     fprintf(stderr," -m : enable automatic mode switching upon including .h/.c files\n");
     fprintf(stderr," -n : send LF characters serving as macro terminators to output\n");
@@ -794,11 +763,6 @@ void outchar(char c) {
         }
         C->out->buf[C->out->len++] = c;
     } else {
-        if (dosmode && (c == 10)) {
-            fputc(13, C->out->f);
-            if (file_and_stdout)
-                fputc(13, stdout);
-        }
         if (c != 13) {
             fputc(c, C->out->f);
             if (file_and_stdout)
@@ -1226,7 +1190,6 @@ void initthings(int argc, char **argv) {
     iflevel = 0;
     execallowed = 0;
     autoswitch = 0;
-    dosmode = DEFAULT_CRLF;
 
     for (arg = argv + 1; *arg; arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
@@ -1344,9 +1307,6 @@ void initthings(int argc, char **argv) {
                 }
                 add_comment(S, s, strNl(*(arg - 2)), strNl(*(arg - 1)), **arg,
                         0);
-                break;
-            case 'z':
-                dosmode = 0;
                 break;
             case 'n':
                 S->preservelf = 0;
@@ -1472,9 +1432,6 @@ void initthings(int argc, char **argv) {
             case 'n':
                 S->preservelf = 1;
                 break;
-            case 'z':
-                dosmode = 1;
-                break;
             case 'c':
             case 's':
                 if (!(*(++arg))) {
@@ -1498,13 +1455,6 @@ void initthings(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
     }
-
-#ifndef WIN_NT
-    if ((nincludedirs == 0) && !NoStdInc) {
-        includedir[0] = my_strdup("/usr/include");
-        nincludedirs = 1;
-    }
-#endif
 
     for (i = 0; i < nmacros; i++) {
         if (macros[i].define_specs == NULL )
@@ -1873,28 +1823,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     }
 
     if (SpliceInfix(buf, pos1, pos2, "=~", &spl1, &spl2)) {
-#if ! HAVE_FNMATCH_H
-        bug("globbing support has not been compiled in");
-#endif
-        if (!DoArithmEval(buf, pos1, spl1, &result1)
-                || !DoArithmEval(buf, spl2, pos2, &result2)) {
-            char *str1, *str2;
-
-            /* revert to string comparison */
-            while ((pos1 < spl1) && isWhite(buf[spl1 - 1]))
-                spl1--;
-            while ((pos2 > spl2) && isWhite(buf[spl2]))
-                spl2++;
-            str1 = strdup(buf + pos1);
-            str1[spl1 - pos1] = '\0';
-            str2 = strdup(buf + spl2);
-            str2[pos2 - spl2] = '\0';
-            *result = (fnmatch(str2, str1, 0) == 0);
-            free(str1);
-            free(str2);
-        } else
-            *result = (result1 == result2);
-        return 1;
+        bug("globbing not allowed");
     }
 
     if (SpliceInfix(buf, pos1, pos2, ">=", &spl1, &spl2)) {
@@ -2341,9 +2270,7 @@ static void DoInclude(char *file_name) {
 
     /* if absolute path name is specified */
     if (file_name[0] == SLASH
-#ifdef WIN_NT
     || (isalpha(file_name[0]) && file_name[1]==':')
-#endif
     )
         f = fopen(file_name, "r");
     else /* search current dir, if this search isn't turned off */
@@ -3123,37 +3050,11 @@ void write_include_marker(FILE *f, int lineno, char *filename,
     static char *escapedfilename = NULL;
 
     if ((include_directive_marker != NULL )&& (f != NULL)){
-#ifdef WIN_NT
-            escape_backslashes(filename,&escapedfilename);
-#else
             escapedfilename = filename;
-#endif
             sprintf(lineno_buf,"%d", lineno);
             fprintf(f, include_directive_marker, lineno_buf, escapedfilename, marker);
         }
     }
-
-    /* Under windows, files can have backslashes in them.
-     These should be escaped.
-     */
-void escape_backslashes(const char *instr, char **outstr) {
-    int out_idx = 0;
-
-    if (*outstr != NULL )
-        free(*outstr);
-    *outstr = malloc(2 * strlen(instr));
-
-    while (*instr != '\0') {
-        if (*instr == '\\') {
-            *(*outstr + out_idx) = '\\';
-            out_idx++;
-        }
-        *(*outstr + out_idx) = *instr;
-        out_idx++;
-        instr++;
-    }
-    *(*outstr + out_idx) = '\0';
-}
 
 /* includemarker_input should have 3 ?-marks, which are replaced with %s.
  Also, @ is replaced with a space. These symbols can be escaped with a
