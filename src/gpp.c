@@ -20,20 +20,16 @@
 */
 
 #define PACKAGE_STRING "GPP v2.26-60260df"
-#define SLASH '/'
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <time.h>
 
 #define STACKDEPTH 50
 #define MAXARGS 100
-#define MAXINCL 128   /* max # of include dirs */
 
 #define MAX_GPP_NUM_SIZE 15
-#define MAX_GPP_DATE_SIZE 1024
 
 typedef struct MODE {
     char *mStart; /* before macro name */
@@ -125,7 +121,7 @@ typedef struct COMMENT {
  This is not legal :                     #define <* blah *> foo 3
  If a comment occurs here, the behavior depends on the actual meta-macro :
  most will yield an error and stop gpp (#define, #undef, #ifdef/ifndef,
- #defeval, #include, #mode) ; #exec, #if and #eval should be ok ;
+ #defeval, #mode) ; #if and #eval should be ok ;
  #ifeq will always fail while #ifneq will always succeed ;
 */
 
@@ -148,30 +144,11 @@ typedef struct MACRO {
 
 struct MACRO *macros;
 int nmacros, nalloced;
-char *includedir[MAXINCL];
-int nincludedirs;
-int execallowed;
-int autoswitch;
-/* must be a format-like string that has % % % in it.
- The first % is replaced with line number, the second with "filename", and
- the third with 1, 2 or blank
- Can also use ? instead of %.
- */
-char *include_directive_marker = NULL;
 short WarningLevel = 2;
-
-/* controls if standard dirs, like /usr/include, are to be searched for
- #include and whether the current dir is to be searched first or last. */
-int NoStdInc = 0;
-int NoCurIncFirst = 0;
-int CurDirIncLast = 0;
-int file_and_stdout = 0;
-char *IncludeFile = NULL;
 
 typedef struct OUTPUTCONTEXT {
     char *buf;
     int len, bufsize;
-    FILE *f;
 } OUTPUTCONTEXT;
 
 typedef struct INPUTCONTEXT {
@@ -179,8 +156,7 @@ typedef struct INPUTCONTEXT {
     char *malloced_buf; /* what was actually malloc-ed (buf may have shifted) */
     int len, bufsize;
     int lineno;
-    char *filename;
-    FILE *in;
+    int read_stdin;
     int argc;
     char **argv;
     char **namedargs;
@@ -208,17 +184,7 @@ void usage(void);
 void display_version(void);
 void bug(const char *s);
 void warning(const char *s);
-static void getDirname(const char *fname, char *dirname);
-static FILE *openInCurrentDir(const char *incfile);
 char *ArithmEval(int pos1, int pos2);
-void replace_definition_with_blank_lines(const char *start, const char *end,
-        int skip);
-void replace_directive_with_blank_line(FILE *file);
-void write_include_marker(FILE *f, int lineno, char *filename,
-        const char *marker);
-void construct_include_directive_marker(char **include_directive_marker,
-        const char *includemarker_input);
-static void DoInclude(char *file_name);
 
 /*
  ** strdup() and my_strcasecmp() are not ANSI C, so here we define our own
@@ -241,13 +207,14 @@ static int my_strcasecmp(const char *s, const char *s2) {
     return 0;
 }
 
+__attribute__((__noreturn__))
 void bug(const char *s) {
-    fprintf(stderr, "%s:%d: error: %s\n", C->filename, C->lineno, s);
+    fprintf(stderr, "%d: error: %s\n", C->lineno, s);
     exit(EXIT_FAILURE);
 }
 
 void warning(const char *s) {
-    fprintf(stderr, "%s:%d: warning: %s\n", C->filename, C->lineno, s);
+    fprintf(stderr, "%d: warning: %s\n", C->lineno, s);
 }
 
 struct SPECS *CloneSpecs(const struct SPECS *Q) {
@@ -313,9 +280,9 @@ void display_version(void) {
 }
 
 void usage(void) {
-    fprintf(stderr,"Usage : gpp [-{o|O} outfile] [-I/include/path] [-Dname=val ...] [-x] [-m]\n");
+    fprintf(stderr,"Usage : gpp [-Dname=val ...]\n");
     fprintf(stderr,"            [-n] [-C | -T | -H | -X | -P | -U ... [-M ...]] [+c<n> str1 str2]\n");
-    fprintf(stderr,"            [+s<n> str1 str2 c] [long options] [infile]\n\n");
+    fprintf(stderr,"            [+s<n> str1 str2 c] [long options]\n\n");
     fprintf(stderr,"      default:    #define x y           macro(arg,...)\n");
     fprintf(stderr," -C : maximum cpp compatibility (includes -n, +c, +s, ...)\n");
     fprintf(stderr," -T : TeX-like    \\define{x}{y}         \\macro{arg}{...}\n");
@@ -324,20 +291,11 @@ void usage(void) {
     fprintf(stderr," -P : prolog compatible cpp-like mode\n");
     fprintf(stderr," -U : user-defined syntax (specified in 9 following args; see manual)\n");
     fprintf(stderr," -M : user-defined syntax for meta-macros (specified in 7 following args)\n\n");
-    fprintf(stderr," -o : output to outfile\n");
-    fprintf(stderr," -O : output to outfile and stdout\n");
-    fprintf(stderr," -x : enable #exec built-in macro\n");
-    fprintf(stderr," -m : enable automatic mode switching upon including .h/.c files\n");
     fprintf(stderr," -n : send LF characters serving as macro terminators to output\n");
     fprintf(stderr," +c : use next 2 args as comment start and comment end sequences\n");
     fprintf(stderr," +s : use next 3 args as string start, end and quote character\n\n");
     fprintf(stderr," Long options:\n");
-    fprintf(stderr," --include file : process file before infile\n");
-    fprintf(stderr," --nostdinc : don't search standard directories for files to include\n");
-    fprintf(stderr," --nocurinc : don't search the current directory for files to include\n");
-    fprintf(stderr," --curdirinclast : search the current directory last\n");
     fprintf(stderr," --warninglevel n : set warning level\n");
-    fprintf(stderr," --includemarker formatstring : keep track of #include directives in output\n\n");
     fprintf(stderr," --version : display version information and exit\n");
     fprintf(stderr," -h, --help : display this message and exit\n\n");
 }
@@ -764,9 +722,7 @@ void outchar(char c) {
         C->out->buf[C->out->len++] = c;
     } else {
         if (c != 13) {
-            fputc(c, C->out->f);
-            if (file_and_stdout)
-                fputc(c, stdout);
+            putchar(c);
         }
     }
 }
@@ -785,8 +741,6 @@ void sendout(const char *s, int l, int proc) /* only process the quotechar, that
             if (s[i] != 0)
                 outchar(s[i]);
         }
-    else
-        replace_definition_with_blank_lines(s, s + l - 1, 0);
 }
 
 void extendBuf(int pos) {
@@ -809,7 +763,7 @@ char getChar(int pos) {
     if (lastchar == -666 && !strcmp(S->Meta.mEnd, "\n"))
         lastchar = '\n';
 
-    if (C->in == NULL ) {
+    if (!C->read_stdin) {
         if (pos >= C->len)
             return 0;
         else
@@ -818,7 +772,7 @@ char getChar(int pos) {
     extendBuf(pos);
     while (pos >= C->len) {
         do {
-            c = fgetc(C->in);
+            c = getchar();
         } while (c == 13);
         if (lastchar == '\n')
             C->lineno++;
@@ -1137,16 +1091,16 @@ void shiftIn(int l) {
         C->eof = (C->buf[0] == 0);
     }
     if (C->len <= 1) {
-        if (C->in == NULL )
-            C->eof = 1;
+        if (C->read_stdin)
+            C->eof = feof(stdin);
         else
-            C->eof = feof(C->in);
+            C->eof = 1;
     }
 }
 
 void initthings(int argc, char **argv) {
     char **arg, *s;
-    int i, isinput, isoutput, ishelp, ismode, hasmeta, usrmode;
+    int i, ishelp, ismode, hasmeta, usrmode;
 
     DefaultOp = MakeCharsetSubset(DEFAULT_OP_STRING);
     PrologOp = MakeCharsetSubset(PROLOG_OP_STRING);
@@ -1168,16 +1122,13 @@ void initthings(int argc, char **argv) {
     S->id_set = DefaultId;
 
     C = malloc(sizeof *C);
-    C->in = stdin;
+    C->read_stdin = 1;
     C->argc = 0;
     C->argv = NULL;
-    C->filename = my_strdup("stdin");
     C->out = malloc(sizeof *(C->out));
-    C->out->f = stdout;
     C->out->bufsize = 0;
     C->lineno = 1;
-    isinput = isoutput = ismode = ishelp = hasmeta = usrmode = 0;
-    nincludedirs = 0;
+    ismode = ishelp = hasmeta = usrmode = 0;
     C->bufsize = 80;
     C->len = 0;
     C->buf = C->malloced_buf = malloc(C->bufsize);
@@ -1188,8 +1139,6 @@ void initthings(int argc, char **argv) {
     C->may_have_args = 0;
     commented[0] = 0;
     iflevel = 0;
-    execallowed = 0;
-    autoswitch = 0;
 
     for (arg = argv + 1; *arg; arg++) {
         if (strcmp(*arg, "--help") == 0 || strcmp(*arg, "-h") == 0) {
@@ -1199,35 +1148,6 @@ void initthings(int argc, char **argv) {
         if (strcmp(*arg, "--version") == 0) {
             display_version();
             exit(EXIT_SUCCESS);
-        }
-        if (strcmp(*arg, "--include") == 0) {
-            if (!(*(++arg))) {
-                usage();
-                exit(EXIT_FAILURE);
-            }
-            IncludeFile = *arg;
-            continue;
-        }
-        if (strcmp(*arg, "--nostdinc") == 0) {
-            NoStdInc = 1;
-            continue;
-        }
-        if (strcmp(*arg, "--nocurinc") == 0) {
-            NoCurIncFirst = 1;
-            continue;
-        }
-        if (strcmp(*arg, "--curdirinclast") == 0) {
-            CurDirIncLast = 1;
-            NoCurIncFirst = 1;
-            continue;
-        }
-        if (strcmp(*arg, "--includemarker") == 0) {
-            if (!(*(++arg))) {
-                usage();
-                exit(EXIT_FAILURE);
-            }
-            construct_include_directive_marker(&include_directive_marker, *arg);
-            continue;
         }
         if (strcmp(*arg, "--warninglevel") == 0) {
             if (!(*(++arg))) {
@@ -1279,28 +1199,8 @@ void initthings(int argc, char **argv) {
             default:
                 ishelp = 1;
             }
-        } else if (**arg != '-') {
-            ishelp |= isinput;
-            isinput = 1;
-            C->in = fopen(*arg, "r");
-            free(C->filename);
-            C->filename = my_strdup(*arg);
-            if (C->in == NULL )
-                bug("Cannot open input file");
         } else
             switch ((*arg)[1]) {
-            case 'I':
-                if (nincludedirs == MAXINCL)
-                    bug("too many include directories");
-                if ((*arg)[2] == 0) {
-                    if (!(*(++arg))) {
-                        usage();
-                        exit(EXIT_FAILURE);
-                    }
-                    includedir[nincludedirs++] = my_strdup(*arg);
-                } else
-                    includedir[nincludedirs++] = my_strdup((*arg) + 2);
-                break;
             case 'C':
                 ishelp |= ismode | hasmeta | usrmode;
                 ismode = 1;
@@ -1366,19 +1266,6 @@ void initthings(int argc, char **argv) {
                 }
                 arg += 7;
                 break;
-            case 'O':
-                file_and_stdout = 1;
-            case 'o':
-                if (!(*(++arg))) {
-                    usage();
-                    exit(EXIT_FAILURE);
-                }
-                ishelp |= isoutput;
-                isoutput = 1;
-                C->out->f = fopen(*arg, "w");
-                if (C->out->f == NULL )
-                    bug("Cannot create output file");
-                break;
             case 'D':
                 if ((*arg)[2] == 0) {
                     if (!(*(++arg))) {
@@ -1391,9 +1278,6 @@ void initthings(int argc, char **argv) {
                 parseCmdlineDefine(s);
                 free(s);
                 break;
-            case 'x':
-                execallowed = 1;
-                break;
             case 'n':
                 S->preservelf = 1;
                 break;
@@ -1404,9 +1288,6 @@ void initthings(int argc, char **argv) {
                     exit(EXIT_FAILURE);
                 }
                 delete_comment(S, strNl(*arg));
-                break;
-            case 'm':
-                autoswitch = 1;
                 break;
             default:
                 ishelp = 1;
@@ -1650,14 +1531,12 @@ char *ProcessText(const char *buf, int l, int ambience) {
     T = C;
     C = malloc(sizeof *C);
     C->out = malloc(sizeof *(C->out));
-    C->in = NULL;
+    C->read_stdin = 0;
     C->argc = T->argc;
     C->argv = T->argv;
-    C->filename = T->filename;
     C->out->buf = malloc(80);
     C->out->len = 0;
     C->out->bufsize = 80;
-    C->out->f = NULL;
     C->lineno = T->lineno;
     C->bufsize = l + 2;
     C->len = l + 1;
@@ -2226,78 +2105,6 @@ void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
     free(s);
 }
 
-static void DoInclude(char *file_name) {
-    struct INPUTCONTEXT *N;
-    char *incfile_name = NULL;
-    FILE *f = NULL;
-    int j;
-    int len = strlen(file_name);
-
-    /* if absolute path name is specified */
-    if (file_name[0] == SLASH
-    || (isalpha(file_name[0]) && file_name[1]==':')
-    )
-        f = fopen(file_name, "r");
-    else /* search current dir, if this search isn't turned off */
-    if (!NoCurIncFirst) {
-        f = openInCurrentDir(file_name);
-    }
-
-    for (j = 0; (f == NULL )&&(j<nincludedirs);j++){
-    incfile_name =
-    realloc(incfile_name,len+strlen(includedir[j])+2);
-    strcpy(incfile_name,includedir[j]);
-    incfile_name[strlen(includedir[j])]=SLASH;
-    /* extract the orig include filename */
-    strcpy(incfile_name+strlen(includedir[j])+1, file_name);
-    f=fopen(incfile_name,"r");
-}
-    if (incfile_name != NULL )
-        free(incfile_name);
-
-    /* If didn't find the file and "." is said to be searched last */
-    if (f == NULL && CurDirIncLast) {
-        f = openInCurrentDir(file_name);
-    }
-
-    if (f == NULL )
-        bug("Requested include file not found");
-
-    N = C;
-    C = malloc(sizeof *C);
-    C->in = f;
-    C->argc = 0;
-    C->argv = NULL;
-    C->filename = file_name;
-    C->out = N->out;
-    C->lineno = 1;
-    C->bufsize = 80;
-    C->len = 0;
-    C->buf = C->malloced_buf = malloc(C->bufsize);
-    C->eof = 0;
-    C->namedargs = NULL;
-    C->in_comment = 0;
-    C->ambience = FLAG_TEXT;
-    C->may_have_args = 0;
-    PushSpecs(S);
-    if (autoswitch) {
-        if (!strcmp(file_name + strlen(file_name) - 2, ".h")
-                || !strcmp(file_name + strlen(file_name) - 2, ".c"))
-            SetStandardMode(S, "C");
-    }
-
-    /* Include marker before the included contents */
-    write_include_marker(N->out->f, 1, C->filename, "1");
-    ProcessContext();
-    /* Include marker after the included contents */
-    write_include_marker(N->out->f, N->lineno, N->filename, "2");
-    /* Need to leave the blank line in lieu of #include, like cpp does */
-    replace_directive_with_blank_line(N->out->f);
-    free(C);
-    PopSpecs();
-    C = N;
-}
-
 int ParsePossibleMeta(void) {
     int cklen, nameend;
     int id, expparams, nparam, i, j;
@@ -2334,11 +2141,9 @@ int ParsePossibleMeta(void) {
         id = 6;
         expparams = 0;
     } else if (idequal(C->buf + cklen, nameend - cklen, "include")) {
-        id = 7;
-        expparams = 1;
+        bug("#include not allowed");
     } else if (idequal(C->buf + cklen, nameend - cklen, "exec")) {
-        id = 8;
-        expparams = 1;
+        bug("#exec not allowed");
     } else if (idequal(C->buf + cklen, nameend - cklen, "defeval")) {
         id = 9;
         expparams = 2;
@@ -2362,8 +2167,7 @@ int ParsePossibleMeta(void) {
         id = 15;
         expparams = 0;
     } else if (idequal(C->buf + cklen, nameend - cklen, "file")) {
-        id = 16;
-        expparams = 0;
+        bug("#file not allowed");
     } else if (idequal(C->buf + cklen, nameend - cklen, "elif")) {
         id = 17;
         expparams = 1;
@@ -2374,8 +2178,7 @@ int ParsePossibleMeta(void) {
         id = 19;
         expparams = 1;
     } else if (idequal(C->buf + cklen, nameend - cklen, "date")) {
-        id = 20;
-        expparams = 1;
+        bug("#date not allowed");
     } else
         return -1;
 
@@ -2415,8 +2218,6 @@ int ParsePossibleMeta(void) {
             if (nparam == 1) {
                 p2end = p2start = p1end;
             }
-            replace_definition_with_blank_lines(C->buf + 1, C->buf + p2end,
-                    S->preservelf);
             macros[nmacros].macrotext = remove_comments(p2start, p2end,
                     FLAG_META);
             macros[nmacros].macrolen = strlen(macros[nmacros].macrotext);
@@ -2442,12 +2243,10 @@ int ParsePossibleMeta(void) {
                 macros[nmacros].argnames[j][arge[j] - argb[j]] = 0;
             }
             lookupArgRefs(nmacros++);
-        } else
-            replace_directive_with_blank_line(C->out->f);
+        }
         break;
 
     case 2: /* UNDEF */
-        replace_directive_with_blank_line(C->out->f);
         if (!commented[iflevel]) {
             if (nparam == 2 && WarningLevel > 0)
                 warning("Extra argument to #undef ignored");
@@ -2461,7 +2260,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 3: /* IFDEF */
-        replace_directive_with_blank_line(C->out->f);
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifdefs");
@@ -2479,7 +2277,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 4: /* IFNDEF */
-        replace_directive_with_blank_line(C->out->f);
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifdefs");
@@ -2496,7 +2293,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 5: /* ELSE */
-        replace_directive_with_blank_line(C->out->f);
         if (!commented[iflevel] && (nparam > 0) && WarningLevel > 0)
             warning("Extra argument to #else ignored");
         if (iflevel == 0)
@@ -2506,7 +2302,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 6: /* ENDIF */
-        replace_directive_with_blank_line(C->out->f);
         if (!commented[iflevel] && (nparam > 0) && WarningLevel > 0)
             warning("Extra argument to #endif ignored");
         if (iflevel == 0)
@@ -2515,63 +2310,10 @@ int ParsePossibleMeta(void) {
         break;
 
     case 7: /* INCLUDE */
-        if (!commented[iflevel]) {
-            char *incfile_name;
-
-            if (nparam == 2 && WarningLevel > 0)
-                warning("Extra argument to #include ignored");
-            if (!whiteout(&p1start, &p1end))
-                bug("Missing file name in #include");
-            /* user may put "" or <> */
-            if (((getChar(p1start) == '\"') && (getChar(p1end - 1) == '\"'))
-                    || ((getChar(p1start) == '<') && (getChar(p1end - 1) == '>'))) {
-                p1start++;
-                p1end--;
-            }
-            if (p1start >= p1end)
-                bug("Missing file name in #include");
-            incfile_name = malloc(p1end - p1start + 1);
-            /* extract the orig include filename */
-            for (i = 0; i < p1end - p1start; i++)
-                incfile_name[i] = getChar(p1start + i);
-            incfile_name[p1end - p1start] = 0;
-
-            DoInclude(incfile_name);
-        } else
-            replace_directive_with_blank_line(C->out->f);
-        break;
+        bug("Internal meta-macro identification error: #include not allowed");
 
     case 8: /* EXEC */
-        if (!commented[iflevel]) {
-            if (!execallowed)
-                warning(
-                        "Not allowed to #exec. Command output will be left blank");
-            else {
-                char *s, *t;
-                int c;
-                FILE *f;
-                s = ProcessText(C->buf + p1start, p1end - p1start, FLAG_META);
-                if (nparam == 2) {
-                    t = ProcessText(C->buf + p2start, p2end - p2start,
-                            FLAG_META);
-                    i = strlen(s);
-                    s = realloc(s, i + strlen(t) + 2);
-                    s[i] = ' ';
-                    strcpy(s + i + 1, t);
-                    free(t);
-                }
-                f = popen(s, "r");
-                free(s);
-                if (f == NULL )
-                    warning("Cannot #exec. Command not found(?)");
-                else {
-                    while ((c = fgetc(f)) != EOF)
-                        outchar((char) c);
-                    pclose(f);
-                }
-            }
-        }
-        break;
+        bug("Internal meta-macro identification error: #exec not allowed");
 
     case 9: /* DEFEVAL */
         if (!commented[iflevel]) {
@@ -2586,8 +2328,6 @@ int ParsePossibleMeta(void) {
             if (nparam == 1) {
                 p2end = p2start = p1end;
             }
-            replace_definition_with_blank_lines(C->buf + 1, C->buf + p2end,
-                    S->preservelf);
             macros[nmacros].macrotext = tmpbuf;
             macros[nmacros].macrolen = strlen(macros[nmacros].macrotext);
             macros[nmacros].defined_in_comment = C->in_comment;
@@ -2612,12 +2352,10 @@ int ParsePossibleMeta(void) {
                 macros[nmacros].argnames[j][arge[j] - argb[j]] = 0;
             }
             lookupArgRefs(nmacros++);
-        } else
-            replace_directive_with_blank_line(C->out->f);
+        }
         break;
 
     case 10: /* IFEQ */
-        replace_directive_with_blank_line(C->out->f);
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifeqs");
@@ -2635,7 +2373,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 11: /* IFNEQ */
-        replace_directive_with_blank_line(C->out->f);
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifeqs");
@@ -2665,7 +2402,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 13: /* IF */
-        replace_directive_with_blank_line(C->out->f);
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifs");
@@ -2681,7 +2417,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 14: /* MODE */
-        replace_directive_with_blank_line(C->out->f);
         if (nparam == 1)
             p2start = -1;
         if (!commented[iflevel])
@@ -2692,18 +2427,14 @@ int ParsePossibleMeta(void) {
     case 15: { /* LINE */
         char buf[MAX_GPP_NUM_SIZE];
         sprintf(buf, "%d", C->lineno);
-        replace_directive_with_blank_line(C->out->f);
         sendout(buf, strlen(buf), 0);
     }
         break;
 
     case 16: /* FILE */
-        replace_directive_with_blank_line(C->out->f);
-        sendout(C->filename, strlen(C->filename), 0);
-        break;
+        bug("Internal meta-macro identification error: #file not allowed");
 
     case 17: /* ELIF */
-        replace_directive_with_blank_line(C->out->f);
         if (iflevel == 0)
             bug("#elif without #if");
         if (!commented[iflevel - 1]) {
@@ -2722,7 +2453,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 18: /* ERROR */
-        replace_directive_with_blank_line(C->out->f);
         if (!commented[iflevel])
             bug(
                     ProcessText(C->buf + p1start,
@@ -2731,7 +2461,6 @@ int ParsePossibleMeta(void) {
         break;
 
     case 19: /* WARNING */
-        replace_directive_with_blank_line(C->out->f);
         if (!commented[iflevel]) {
             char *s;
             s = ProcessText(C->buf + p1start,
@@ -2741,19 +2470,8 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 20: { /* DATE */
-        char buf[MAX_GPP_DATE_SIZE];
-        char *fmt;
-        time_t now = time(NULL );
-        fmt = ProcessText(C->buf + p1start,
-                (nparam == 2 ? p2end : p1end) - p1start, FLAG_META);
-        if (!strftime(buf, MAX_GPP_DATE_SIZE, fmt, localtime(&now)))
-            bug("date buffer exceeded");
-        replace_directive_with_blank_line(C->out->f);
-        sendout(buf, strlen(buf), 0);
-        free(fmt);
-    }
-        break;
+    case 20: /* DATE */
+        bug("Internal meta-macro identification error: #date not allowed");
 
     default:
         bug("Internal meta-macro identification error");
@@ -2824,10 +2542,9 @@ int ParsePossibleUser(void) {
     T = C;
     C = malloc(sizeof *C);
     C->out = T->out;
-    C->in = NULL;
+    C->read_stdin = 0;
     C->argc = argc;
     C->argv = argv;
-    C->filename = T->filename;
     C->lineno = T->lineno;
     C->may_have_args = 1;
     if ((macros[id].nnamedargs == -1) && (lg_end >= 0)
@@ -2892,9 +2609,6 @@ void ParseText(void) {
                     matchEndSequence(p->end, &l);
                     if (p->flags[C->ambience] & OUTPUT_DELIM)
                         sendout(C->buf + 1, cs - 1, 0);
-                    if (!(p->flags[C->ambience] & OUTPUT_TEXT))
-                        replace_definition_with_blank_lines(C->buf + 1,
-                                C->buf + ce - 1, 0);
                     if (p->flags[C->ambience] & PARSE_MACROS) {
                         C->in_comment = 1;
                         s = ProcessText(C->buf + cs, ce - cs, C->ambience);
@@ -2944,145 +2658,12 @@ void ProcessContext(void) {
     }
     while (!C->eof)
         ParseText();
-    if (C->in != NULL )
-        fclose(C->in);
     free(C->malloced_buf);
-}
-
-/* additions by M. Kifer - revised D.A. 12/16/01 */
-
-/* copy SLASH-terminated name of the directory of fname */
-static void getDirname(const char *fname, char *dirname) {
-    int i;
-
-    for (i = strlen(fname) - 1; i >= 0; i--) {
-        if (fname[i] == SLASH)
-            break;
-    }
-    if (i >= 0) {
-        strncpy(dirname, fname, i);
-        dirname[i] = SLASH;
-    } else
-        /* just a precaution: i must be -1 in this case anyway */
-        i = -1;
-
-    dirname[i + 1] = '\0';
-}
-
-static FILE *openInCurrentDir(const char *incfile) {
-    FILE *f;
-    char *absfile;
-
-    if (IncludeFile) {
-      return fopen(incfile, "r");
-    }
-
-    absfile = calloc(strlen(C->filename) + strlen(incfile) + 1, 1);
-    getDirname(C->filename, absfile);
-    strcat(absfile, incfile);
-    f = fopen(absfile, "r");
-    free(absfile);
-    return f;
-}
-
-/* skip = # of \n's already output by other mechanisms, to be skipped */
-void replace_definition_with_blank_lines(const char *start, const char *end,
-        int skip) {
-    if ((include_directive_marker != NULL )&& (C->out->f != NULL)){
-    while (start <= end) {
-        if (*start == '\n') {
-            if (skip) skip--; else fprintf(C->out->f,"\n");
-        }
-        start++;
-    }
-}
-}
-
-    /* insert blank line where the metas IFDEF,ELSE,INCLUDE, etc., stood in the
-     input text
-     */
-void replace_directive_with_blank_line(FILE *f) {
-    if ((include_directive_marker != NULL )&& (f != NULL)
-    && (!S->preservelf) && (S->Meta.mArgE[0]=='\n')){
-    fprintf(f,"\n");
-}
-}
-
-    /* If lineno is > 15 digits - the number won't be printed correctly */
-void write_include_marker(FILE *f, int lineno, char *filename,
-        const char *marker) {
-    static char lineno_buf[MAX_GPP_NUM_SIZE];
-    static char *escapedfilename = NULL;
-
-    if ((include_directive_marker != NULL )&& (f != NULL)){
-            escapedfilename = filename;
-            sprintf(lineno_buf,"%d", lineno);
-            fprintf(f, include_directive_marker, lineno_buf, escapedfilename, marker);
-        }
-    }
-
-/* includemarker_input should have 3 ?-marks, which are replaced with %s.
- Also, @ is replaced with a space. These symbols can be escaped with a
- backslash.
- */
-void construct_include_directive_marker(char **include_directive_marker,
-        const char *includemarker_input) {
-    int len = strlen(includemarker_input);
-    char ch;
-    int in_idx = 0, out_idx = 0;
-    int quoted = 0, num_repl = 0;
-
-    /* only 6 extra chars are needed: 3 for the three %'s, 2 for \n, 1 for \0 */
-    *include_directive_marker = malloc(len + 18);
-
-    ch = *includemarker_input;
-    while (ch != '\0' && in_idx < len) {
-        if (quoted) {
-            *(*include_directive_marker + out_idx) = ch;
-            out_idx++;
-            quoted = 0;
-        } else {
-            switch (ch) {
-            case '\\':
-                quoted = 1;
-                break;
-            case '@':
-                *(*include_directive_marker + out_idx) = ' ';
-                out_idx++;
-                break;
-            case '%':
-            case '?':
-                *(*include_directive_marker + out_idx) = '%';
-                out_idx++;
-                *(*include_directive_marker + out_idx) = 's';
-                out_idx++;
-                if (++num_repl > 3)
-                    bug("only 3 substitutions allowed in -includemarker");
-                break;
-            default:
-                *(*include_directive_marker + out_idx) = ch;
-                out_idx++;
-            }
-        }
-
-        in_idx++;
-        ch = *(includemarker_input + in_idx);
-    }
-
-    *(*include_directive_marker + out_idx) = '\n';
-    out_idx++;
-    *(*include_directive_marker + out_idx) = '\0';
 }
 
 int main(int argc, char **argv) {
     initthings(argc, argv);
-    /* The include marker at the top of the file */
-    if (IncludeFile)
-        DoInclude(IncludeFile);
-    IncludeFile = NULL;
-    write_include_marker(C->out->f, 1, C->filename, "");
     ProcessContext();
-    fclose(C->out->f);
     return EXIT_SUCCESS;
 }
 

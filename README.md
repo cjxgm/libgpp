@@ -16,3 +16,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - Removed deprecated command-line options.
 
+- Removed all IO (except stdio): `#include`, `#exec`, `#file`, `#date` all gone.
+
