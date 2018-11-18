@@ -207,14 +207,14 @@ int commented[STACKDEPTH], iflevel;
 // 2: not output because we're in a #elif and we've already gone through
 // the right case (so #else/#elif can't toggle back to output)
 
-void process_context(void); // the main loop
+void process_context(); // the main loop
 
 int find_ident(const char *b, int l);
 void delete_macro(int i);
 
 // various recent additions
-void usage(void);
-void display_version(void);
+void usage();
+void display_version();
 void bug(const char *s);
 void warning(const char *s);
 char *arithm_eval(int pos1, int pos2);
@@ -290,7 +290,7 @@ void push_specs(const Specs *X) {
     S = P;
 }
 
-void pop_specs(void) {
+void pop_specs() {
     Specs *P;
 
     P = S;
@@ -301,7 +301,7 @@ void pop_specs(void) {
         bug("#mode restore without #mode save");
 }
 
-void display_version(void) {
+void display_version() {
     fprintf(stderr, PACKAGE_STRING "\n");
     fprintf(stderr, "Copyright (C) 1996-2001 Denis Auroux\n");
     fprintf(stderr, "Copyright (C) 2003-2017 Tristan Miller\n");
@@ -311,7 +311,7 @@ void display_version(void) {
             "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n");
 }
 
-void usage(void) {
+void usage() {
     fprintf(stderr,"Usage : gpp [-Dname=val ...]\n");
     fprintf(stderr,"            [long options]\n\n");
     fprintf(stderr,"      default:    #define x y           macro(arg,...)\n");
@@ -2007,7 +2007,7 @@ void process_mode_command(int p1start, int p1end, int p2start, int p2end) {
     free(s);
 }
 
-int parse_possible_meta(void) {
+int parse_possible_meta() {
     int cklen, nameend;
     int id, expparams, nparam, i, j;
     int p1start, p1end, p2start, p2end, macend;
@@ -2381,7 +2381,7 @@ int parse_possible_meta(void) {
     return 0;
 }
 
-int parse_possible_user(void) {
+int parse_possible_user() {
     int idstart, idend, sh_end, lg_end, macend;
     int argc, id, i, l;
     char *argv[MAXARGS];
@@ -2494,7 +2494,7 @@ int parse_possible_user(void) {
     return 0;
 }
 
-void parse_text(void) {
+void parse_text() {
     int l, cs, ce;
     char c, *s;
     Comment *p;
@@ -2552,7 +2552,7 @@ void parse_text(void) {
     shift_in(l);
 }
 
-void process_context(void) {
+void process_context() {
     if (C->len == 0) {
         C->buf[0] = '\n';
         C->len++;
@@ -2562,10 +2562,9 @@ void process_context(void) {
     free(C->malloced_buf);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
     (void) argc;
     initthings(argv);
     process_context();
-    return EXIT_SUCCESS;
 }
 
