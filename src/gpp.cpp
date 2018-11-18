@@ -1,27 +1,26 @@
-/* File:      gpp.c  -- generic preprocessor
-** Author:    Denis Auroux, Tristan Miller, Giumo Clanjor
-** Contact:   Giumo Clanjor <cjxgm2@gmail.com>
-**
-** GPP:
-**   Copyright (C) 1996, 1999, 2001 Denis Auroux
-**   Copyright (C) 2003-2017 Tristan Miller
-**
-** libgpp:
-**   Copyright (C) 2018 Giumo Clanjor
-**
-** This program is free software: you can redistribute it and/or
-** modify it under the terms of the GNU Lesser General Public License as
-** published by the Free Software Foundation, either version 3 of the
-** License, or (at your option) any later version.
-**
-** This program is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU Lesser General Public License for more details.
-**
-** You should have received a copy of the GNU Lesser General Public License
-** along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+// File:      gpp.cpp  -- generic preprocessor
+// Author:    Denis Auroux, Tristan Miller, Giumo Clanjor
+// Contact:   Giumo Clanjor <cjxgm2@gmail.com>
+//
+// GPP:
+// . Copyright (C) 1996, 1999, 2001 Denis Auroux
+// . Copyright (C) 2003-2017 Tristan Miller
+//
+// libgpp:
+// . Copyright (C) 2018 Giumo Clanjor
+//
+// This program is free software: you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PACKAGE_STRING "GPP v2.26-60260df libgpp v1.0.0"
 
@@ -72,39 +71,40 @@ namespace
 #define MAX_GPP_NUM_SIZE 15
 
 typedef struct MODE {
-    char const* mStart; /* before macro name */
-    char const* mEnd; /* end macro without arg */
-    char const* mArgS; /* start 1st argument */
-    char const* mArgSep; /* separate arguments */
-    char const* mArgE; /* end last argument */
-    char const* mArgRef; /* how to refer to arguments in a def */
-    char quotechar; /* quote next char */
-    char const* stackchar; /* characters to stack */
-    char const* unstackchar; /* characters to unstack */
+    char const* mStart;         // before macro name
+    char const* mEnd;           // end macro without arg
+    char const* mArgS;          // start 1st argument
+    char const* mArgSep;        // separate arguments
+    char const* mArgE;          // end last argument
+    char const* mArgRef;        // how to refer to arguments in a def
+    char quotechar;             // quote next char
+    char const* stackchar;      // characters to stack
+    char const* unstackchar;    // characters to unstack
 } MODE;
 
-/* translation for delimiters :
-   \001 = \b = ' ' = one or more spaces    \201 = \!b = non-space
-   \002 = \w = zero or more spaces
-   \003 = \B = one or more spaces or \n    \203 = \!B = non-space nor \n
-   \004 = \W = zero or more spaces or \n
-   \005 = \a = alphabetic (a-z, A-Z)       \205 = \!a = non-alphabetic
-   \006 = \A = alphabetic or space/\n      \206 = \!A
-   \007 = \# = numeric (0-9)               \207 = \!#
-   \010 = \i = identifier (a-zA-Z0-9_)     \210 = \!i
-   \011 = \t, \012 = \n                    \211 = \!t, \212 = \!n
-   \013 = \o = operator (+-*\/^<>=`~:.?@#&!%|) \213 = \!o
-   \014 = \O = operator or ()[]{}              \214 = \!O
-*/
-/*                   st        end   args   sep    arge ref  quot  stk  unstk*/
+// translation for delimiters :
+//
+// > \001 = \b = ' ' = one or more spaces    \201 = \!b = non-space
+// > \002 = \w = zero or more spaces
+// > \003 = \B = one or more spaces or \n    \203 = \!B = non-space nor \n
+// > \004 = \W = zero or more spaces or \n
+// > \005 = \a = alphabetic (a-z, A-Z)       \205 = \!a = non-alphabetic
+// > \006 = \A = alphabetic or space/\n      \206 = \!A
+// > \007 = \# = numeric (0-9)               \207 = \!#
+// > \010 = \i = identifier (a-zA-Z0-9_)     \210 = \!i
+// > \011 = \t, \012 = \n                    \211 = \!t, \212 = \!n
+// > \013 = \o = operator (+-*\/^<>=`~:.?@#&!%|) \213 = \!o
+// > \014 = \O = operator or ()[]{}              \214 = \!O
+
+// -                 st        end   args   sep    arge ref  quot  stk  unstk
 struct MODE CUser = {"",       "",   "(",   ",",   ")", "#", '\\', "(", ")" };
 struct MODE CMeta = {"#",      "\n", "\001","\001","\n","#", '\\', "(", ")" };
 
 #define DEFAULT_OP_STRING (unsigned char *)"+-*/\\^<>=`~:.?@#&!%|"
 #define DEFAULT_OP_PLUS   (unsigned char *)"()[]{}"
-#define DEFAULT_ID_STRING (unsigned char *)"\005\007_" /* or equiv. "A-Za-z0-9_" */
+#define DEFAULT_ID_STRING (unsigned char *)"\005\007_" // or equiv. "A-Za-z0-9_"
 
-/* here we assume that longs are at least 32 bit... if not, change this ! */
+// here we assume that longs are at least 32 bit... if not, change this !
 #define LOG_LONG_BITS 5
 #define CHARSET_SUBSET_LEN (256 >> LOG_LONG_BITS)
 typedef unsigned long *CHARSET_SUBSET;
@@ -112,17 +112,17 @@ typedef unsigned long *CHARSET_SUBSET;
 CHARSET_SUBSET DefaultOp, DefaultExtOp, PrologOp, DefaultId;
 
 typedef struct COMMENT {
-    char *start; /* how the comment/string starts */
-    char *end; /* how it ends */
-    char quote; /* how to prevent it from ending */
-    char warn; /* a character that shouldn't be in there */
-    int flags[3]; /* meta, user, text */
+    char *start;        // how the comment/string starts
+    char *end;          // how it ends
+    char quote;         // how to prevent it from ending
+    char warn;          // a character that shouldn't be in there
+    int flags[3];       // meta, user, text
     struct COMMENT *next;
 } COMMENT;
 
-#define OUTPUT_TEXT     0x1   /* what's inside will be output */
-#define OUTPUT_DELIM    0x2   /* the delimiters will be output */
-#define PARSE_MACROS    0x4   /* macros inside will be parsed */
+#define OUTPUT_TEXT     0x1   // what's inside will be output
+#define OUTPUT_DELIM    0x2   // the delimiters will be output
+#define PARSE_MACROS    0x4   // macros inside will be parsed
 #define FLAG_IGNORE     0x40
 
 #define FLAG_STRING    (OUTPUT_TEXT|OUTPUT_DELIM)
@@ -132,32 +132,31 @@ typedef struct COMMENT {
 #define FLAG_USER 1
 #define FLAG_TEXT 2
 
-/* Some stuff I removed because it made for some impossible situations :
-
- #define PARSE_COMMENTS  0x8
-   comments inside comments will not be parsed because nesting comments is
-   too complicated (syntax conflicts, esp. to find a comment's end)
-   -- of course, unless the comment is ignored.
-
- #define MACRO_FRIENDLY  0x20
-   a comment-end is to be processed even if an unfinished macro call has
-   started inside the comment, otherwise it's too hard do decide in advance
-   where a comment ends. In particular foo('bar((((') is valid.
-
- #define PREVENT_DELIM   0x10
-   all comments will prevent macro delimitation, i.e. foo('bar) is invalid.
-   -- of course, unless the comment is ignored.
-   Too bad, #define foo '...    terminates only at following "'".
-   Unless one adds quotechars like in #define foo \' ...
-
- ALSO NOTE : comments are not allowed before the end of the first argument
- to a meta-macro. E.g. this is legal :   #define foo <* blah *> 3
- This is not legal :                     #define <* blah *> foo 3
- If a comment occurs here, the behavior depends on the actual meta-macro :
- most will yield an error and stop gpp (#define, #undef, #ifdef/ifndef,
- #defeval, #mode) ; #if and #eval should be ok ;
- #ifeq will always fail while #ifneq will always succeed ;
-*/
+// Some stuff I removed because it made for some impossible situations :
+//
+// > #define PARSE_COMMENTS  0x8
+// >   comments inside comments will not be parsed because nesting comments is
+// >   too complicated (syntax conflicts, esp. to find a comment's end)
+// >   -- of course, unless the comment is ignored.
+//
+// > #define MACRO_FRIENDLY  0x20
+// >   a comment-end is to be processed even if an unfinished macro call has
+// >   started inside the comment, otherwise it's too hard do decide in advance
+// >   where a comment ends. In particular foo('bar((((') is valid.
+//
+// > #define PREVENT_DELIM   0x10
+// >   all comments will prevent macro delimitation, i.e. foo('bar) is invalid.
+// >   -- of course, unless the comment is ignored.
+// >   Too bad, #define foo '...    terminates only at following "'".
+// >   Unless one adds quotechars like in #define foo \' ...
+//
+// ALSO NOTE : comments are not allowed before the end of the first argument
+// to a meta-macro. E.g. this is legal :   #define foo <* blah *> 3
+// This is not legal :                     #define <* blah *> foo 3
+// If a comment occurs here, the behavior depends on the actual meta-macro :
+// most will yield an error and stop gpp (#define, #undef, #ifdef/ifndef,
+// #defeval, #mode) ; #if and #eval should be ok ;
+// #ifeq will always fail while #ifneq will always succeed ;
 
 typedef struct SPECS {
     struct MODE User, Meta;
@@ -186,7 +185,7 @@ typedef struct OUTPUTCONTEXT {
 
 typedef struct INPUTCONTEXT {
     char *buf;
-    char *malloced_buf; /* what was actually malloc-ed (buf may have shifted) */
+    char *malloced_buf; // what was actually malloc-ed (buf may have shifted)
     int len, bufsize;
     int lineno;
     int read_stdin;
@@ -196,33 +195,31 @@ typedef struct INPUTCONTEXT {
     struct OUTPUTCONTEXT *out;
     int eof;
     int in_comment;
-    int ambience; /* FLAG_TEXT, FLAG_USER or FLAG_META */
+    int ambience; // FLAG_TEXT, FLAG_USER or FLAG_META
     int may_have_args;
 } INPUTCONTEXT;
 
 struct INPUTCONTEXT *C;
 
 int commented[STACKDEPTH], iflevel;
-/* commented = 0: output, 1: not output,
- 2: not output because we're in a #elif and we've already gone through
- the right case (so #else/#elif can't toggle back to output) */
+// commented = 0: output, 1: not output,
+// 2: not output because we're in a #elif and we've already gone through
+// the right case (so #else/#elif can't toggle back to output)
 
-void ProcessContext(void); /* the main loop */
+void ProcessContext(void); // the main loop
 
 int findIdent(const char *b, int l);
 void delete_macro(int i);
 
-/* various recent additions */
+// various recent additions
 void usage(void);
 void display_version(void);
 void bug(const char *s);
 void warning(const char *s);
 char *ArithmEval(int pos1, int pos2);
 
-/*
- ** strdup() and my_strcasecmp() are not ANSI C, so here we define our own
- ** versions in case the compiler does not support them
- */
+// strdup() and my_strcasecmp() are not ANSI C, so here we define our own
+// versions in case the compiler does not support them
 static char *my_strdup(const char *s) {
     size_t len = strlen(s) + 1;
     char *newstr = XX malloc(len);
@@ -371,7 +368,7 @@ void lookupArgRefs(int n) {
     char *p;
 
     if (macros[n].argnames != NULL )
-        return; /* don't mess with those */
+        return; // don't mess with those
     macros[n].nnamedargs = -1;
     l = strlen(S->User.mArgRef);
     for (i = 0, p = macros[n].macrotext; i < macros[n].macrolen; i++, p++) {
@@ -386,7 +383,7 @@ void lookupArgRefs(int n) {
     }
 }
 
-char *strNl0(const char *s) /* replace "\\n" by "\n" in a cmd-line arg */
+char *strNl0(const char *s) // replace "\\n" by "\n" in a cmd-line arg
 {
     char *t, *u;
     t = XX malloc(strlen(s) + 1);
@@ -404,7 +401,7 @@ char *strNl0(const char *s) /* replace "\\n" by "\n" in a cmd-line arg */
     return t;
 }
 
-char *strNl(const char *s) /* the same but with whitespace specifier handling */
+char *strNl(const char *s) // the same but with whitespace specifier handling
 {
     char *t, *u;
     int neg;
@@ -425,38 +422,38 @@ char *strNl(const char *s) /* the same but with whitespace specifier handling */
             case 't':
                 *u = '\t';
                 break;
-            case 'b': /* one or more spaces */
+            case 'b': // one or more spaces
                 *u = '\001';
                 break;
-            case 'w': /* zero or more spaces */
+            case 'w': // zero or more spaces
                 if (neg)
                     bug("\\w and \\W cannot be negated");
                 *u = '\002';
                 break;
-            case 'B': /* one or more spaces or \n */
+            case 'B': // one or more spaces or \n
                 *u = '\003';
                 break;
-            case 'W': /* zero or more spaces or \n */
+            case 'W': // zero or more spaces or \n
                 if (neg)
                     bug("\\w and \\W cannot be negated");
                 *u = '\004';
                 break;
-            case 'a': /* alphabetic */
+            case 'a': // alphabetic
                 *u = '\005';
                 break;
-            case 'A': /* alphabetic + space */
+            case 'A': // alphabetic + space
                 *u = '\006';
                 break;
-            case '#': /* numeric */
+            case '#': // numeric
                 *u = '\007';
                 break;
-            case 'i': /* identifier */
+            case 'i': // identifier
                 *u = '\010';
                 break;
-            case 'o': /* operator */
+            case 'o': // operator
                 *u = '\013';
                 break;
-            case 'O': /* operator/parenthesis */
+            case 'O': // operator/parenthesis
                 *u = '\014';
                 break;
             default:
@@ -477,7 +474,7 @@ char *strNl(const char *s) /* the same but with whitespace specifier handling */
     return t;
 }
 
-/* same as strnl() but for C strings & in-place */
+// same as strnl() but for C strings & in-place
 char *strNl2(char *s, int check_delim) {
     char *u;
     int neg;
@@ -497,38 +494,38 @@ char *strNl2(char *s, int check_delim) {
             case 't':
                 *u = '\t';
                 break;
-            case 'b': /* one or more spaces */
+            case 'b': // one or more spaces
                 *u = '\001';
                 break;
-            case 'w': /* zero or more spaces */
+            case 'w': // zero or more spaces
                 if (neg)
                     bug("\\w and \\W cannot be negated");
                 *u = '\002';
                 break;
-            case 'B': /* one or more spaces or \n */
+            case 'B': // one or more spaces or \n
                 *u = '\003';
                 break;
-            case 'W': /* zero or more spaces or \n */
+            case 'W': // zero or more spaces or \n
                 if (neg)
                     bug("\\w and \\W cannot be negated");
                 *u = '\004';
                 break;
-            case 'a': /* alphabetic */
+            case 'a': // alphabetic
                 *u = '\005';
                 break;
-            case 'A': /* alphabetic + space */
+            case 'A': // alphabetic + space
                 *u = '\006';
                 break;
-            case '#': /* numeric */
+            case '#': // numeric
                 *u = '\007';
                 break;
-            case 'i': /* identifier */
+            case 'i': // identifier
                 *u = '\010';
                 break;
-            case 'o': /* operator */
+            case 'o': // operator
                 *u = '\013';
                 break;
-            case 'O': /* operator/parenthesis */
+            case 'O': // operator/parenthesis
                 *u = '\014';
                 break;
             case '"':
@@ -592,7 +589,7 @@ void parseCmdlineDefine(const char *s) {
         delete_macro(i);
     newmacro(s, l, 0);
 
-    /* possibly allow named arguments: -Dmacro(arg1,arg2)=... (no spaces) */
+    // possibly allow named arguments: -Dmacro(arg1,arg2)=... (no spaces)
     if (s[l] == '(') {
         argc = 0;
         do {
@@ -618,7 +615,7 @@ void parseCmdlineDefine(const char *s) {
         macros[nmacros].argnames[argc] = NULL;
     }
 
-    /* the macro definition afterwards ! */
+    // the macro definition afterwards !
     if (s[l] == '=')
         l++;
     else if (s[l] != 0)
@@ -691,7 +688,7 @@ void add_comment(struct SPECS *S, const char *specif, char *start, char *end,
         bug("Comment/string start delimiter must be non-empty");
     for (p = S->comments; p != NULL ; p = p->next)
         if (!strcmp(p->start, start)) {
-            if (strcmp(p->end, end)) /* already exists with a different end */
+            if (strcmp(p->end, end)) // already exists with a different end
                 bug("Conflicting comment/string delimiter specifications");
             free(p->start);
             free(p->end);
@@ -751,7 +748,7 @@ void outchar(char c) {
     }
 }
 
-void sendout(const char *s, int l, int proc) /* only process the quotechar, that's all */
+void sendout(const char *s, int l, int proc) // only process the quotechar, that's all
 {
     int i;
 
@@ -770,7 +767,7 @@ void sendout(const char *s, int l, int proc) /* only process the quotechar, that
 void extendBuf(int pos) {
     char *p;
     if (C->bufsize <= pos) {
-        C->bufsize += pos; /* approx double */
+        C->bufsize += pos; // approx double
         p = XX malloc(C->bufsize);
         memcpy(p, C->buf, C->len);
         free(C->malloced_buf);
@@ -808,7 +805,7 @@ char getChar(int pos) {
     return C->buf[pos];
 }
 
-int whiteout(int *pos1, int *pos2) /* remove whitespace on both sides */
+int whiteout(int *pos1, int *pos2) // remove whitespace on both sides
 {
     while ((*pos1 < *pos2) && isWhite(getChar(*pos1)))
         (*pos1)++;
@@ -857,7 +854,7 @@ int matchSequence(const char *s, int *pos) {
     char c;
 
     while (*s != 0) {
-        if (!((*s) & 0x60)) { /* special sequences */
+        if (!((*s) & 0x60)) { // special sequences
             match = 1;
             switch ((*s) & 0x1f) {
             case '\001':
@@ -937,7 +934,7 @@ int matchSequence(const char *s, int *pos) {
 int matchEndSequence(const char *s, int *pos) {
     if (*s == 0)
         return 1;
-    /* if terminator is \n and we're at end of input, let it be... */
+    // if terminator is \n and we're at end of input, let it be...
     if (getChar(*pos) == 0 && s[0] == '\n' && s[1] == 0)
         return 1;
     if (!matchSequence(s, pos))
@@ -949,7 +946,7 @@ int matchStartSequence(const char *s, int *pos) {
     char c;
     int match;
 
-    if (!((*s) & 0x60)) { /* special sequences from prev. context */
+    if (!((*s) & 0x60)) { // special sequences from prev. context
         c = getChar(*pos - 1);
         match = 1;
         if (*s == 0)
@@ -1017,12 +1014,12 @@ CHARSET_SUBSET MakeCharsetSubset(unsigned char *s) {
     for (i = 0; i < CHARSET_SUBSET_LEN; i++)
         x[i] = 0;
     while (*s != 0) {
-        if (!((*s) & 0x60)) { /* special sequences */
+        if (!((*s) & 0x60)) { // special sequences
             if ((*s) & 0x80)
                 bug(
                         "negated special sequences not allowed in charset specifications");
             switch ((*s) & 0x1f) {
-            case '\002': /* \w, \W, \i, \o, \O not allowed */
+            case '\002': // \w, \W, \i, \o, \O not allowed
             case '\004':
             case '\010':
             case '\013':
@@ -1109,7 +1106,7 @@ void shiftIn(int l) {
     if (l >= C->len)
         C->len = 0;
     else {
-        if (C->len - l > 100) { /* we want to shrink that buffer */
+        if (C->len - l > 100) { // we want to shrink that buffer
             C->buf += l;
             C->bufsize -= l;
         } else
@@ -1261,7 +1258,7 @@ void initthings(char const* const* argv) {
     for (i = 0; i < nmacros; i++) {
         if (macros[i].define_specs == NULL )
             macros[i].define_specs = CloneSpecs(S);
-        lookupArgRefs(i); /* for macro aliasing */
+        lookupArgRefs(i); // for macro aliasing
     }
 }
 
@@ -1300,7 +1297,7 @@ void SkipPossibleComments(int *pos, int cmtmode, int silentonly) {
     do {
         found = 0;
         if (getChar(*pos) == 0)
-            return; /* EOF */
+            return; // EOF
         for (c = S->comments; c != NULL ; c = c->next)
             if (!(c->flags[cmtmode] & FLAG_IGNORE))
                 if (!silentonly || (c->flags[cmtmode] == FLAG_COMMENT))
@@ -1314,16 +1311,15 @@ void SkipPossibleComments(int *pos, int cmtmode, int silentonly) {
     } while (found);
 }
 
-/* look for a possible user macro.
-   Input :  idstart = scan start
-            idcheck = check id for long macro forms before splicing args ?
-            cmtmode = comment mode (FLAG_META or FLAG_USER)
-   Output : idstart/idend = macro name location
-            sh_end/lg_end = macro form end (-1 if no match)
-            argb/arge     = argument locations for long form
-            argc          = argument count for long form
-            id            = macro id, if idcheck was set at input
-*/
+// look for a possible user macro.
+// Input :  idstart = scan start
+// .        idcheck = check id for long macro forms before splicing args ?
+// .        cmtmode = comment mode (FLAG_META or FLAG_USER)
+// Output : idstart/idend = macro name location
+// .        sh_end/lg_end = macro form end (-1 if no match)
+// .        argb/arge     = argument locations for long form
+// .        argc          = argument count for long form
+// .        id            = macro id, if idcheck was set at input
 int SplicePossibleUser(int *idstart, int *idend, int *sh_end, int *lg_end,
         int *argb, int *arge, int *argc, int idcheck, int *id, int cmtmode) {
     int match, k, pos;
@@ -1334,7 +1330,7 @@ int SplicePossibleUser(int *idstart, int *idend, int *sh_end, int *lg_end,
     if ((*idend) && !getChar(*idend - 1))
         return 0;
 
-    /* look for args or no args */
+    // look for args or no args
     *sh_end = *idend;
     if (!matchEndSequence(S->User.mEnd, sh_end))
         *sh_end = -1;
@@ -1355,11 +1351,11 @@ int SplicePossibleUser(int *idstart, int *idend, int *sh_end, int *lg_end,
                 bug("too many macro parameters");
             argb[*argc] = pos;
             k = 0;
-            while (1) { /* look for mArgE, mArgSep, or comment-start */
+            while (1) { // look for mArgE, mArgSep, or comment-start
                 pos = iterIdentifierEnd(pos);
                 SkipPossibleComments(&pos, cmtmode, 0);
                 if (getChar(pos) == 0)
-                    return (*sh_end >= 0); /* EOF */
+                    return (*sh_end >= 0); // EOF
                 if (strchr(S->User.stackchar, getChar(pos)))
                     k++;
                 if (k) {
@@ -1376,10 +1372,10 @@ int SplicePossibleUser(int *idstart, int *idend, int *sh_end, int *lg_end,
                         break;
                     }
                 }
-                pos++; /* nothing matched, go forward */
+                pos++; // nothing matched, go forward
             }
             (*argc)++;
-            if (match) { /* no more args */
+            if (match) { // no more args
                 *lg_end = pos;
                 break;
             }
@@ -1393,7 +1389,7 @@ int findMetaArgs(int start, int *p1b, int *p1e, int *p2b, int *p2e, int *endm,
     int pos, k;
     int hyp_end1, hyp_end2;
 
-    /* look for mEnd or mArgS */
+    // look for mEnd or mArgS
     pos = start;
     if (!matchSequence(S->Meta.mArgS, &pos)) {
         if (!matchEndSequence(S->Meta.mEnd, &pos))
@@ -1403,7 +1399,7 @@ int findMetaArgs(int start, int *p1b, int *p1e, int *p2b, int *p2e, int *endm,
     }
     *p1b = pos;
 
-    /* special syntax for #define : 1st arg is a macro call */
+    // special syntax for #define : 1st arg is a macro call
     if ((*argc)
             && SplicePossibleUser(&pos, p1e, &hyp_end1, &hyp_end2, argb, arge,
                     argc, 0, NULL, FLAG_META)) {
@@ -1424,7 +1420,7 @@ int findMetaArgs(int start, int *p1b, int *p1e, int *p2b, int *p2e, int *endm,
     } else {
         *argc = 0;
         k = 0;
-        while (1) { /* look for mArgE, mArgSep, or comment-start */
+        while (1) { // look for mArgE, mArgSep, or comment-start
             pos = iterIdentifierEnd(pos);
             SkipPossibleComments(&pos, FLAG_META, 0);
             if (getChar(pos) != 0 && strchr(S->Meta.stackchar, getChar(pos)))
@@ -1444,13 +1440,13 @@ int findMetaArgs(int start, int *p1b, int *p1e, int *p2b, int *p2e, int *endm,
             }
             if (getChar(pos) == 0)
                 bug("unfinished macro argument");
-            pos++; /* nothing matched, go forward */
+            pos++; // nothing matched, go forward
         }
     }
 
     *p2b = pos;
     k = 0;
-    while (1) { /* look for mArgE or comment-start */
+    while (1) { // look for mArgE or comment-start
         pos = iterIdentifierEnd(pos);
         SkipPossibleComments(&pos, FLAG_META, 0);
         if (getChar(pos) != 0 && strchr(S->Meta.stackchar, getChar(pos)))
@@ -1465,7 +1461,7 @@ int findMetaArgs(int start, int *p1b, int *p1e, int *p2b, int *p2e, int *endm,
         }
         if (getChar(pos) == 0)
             bug("unfinished macro");
-        pos++; /* nothing matched, go forward */
+        pos++; // nothing matched, go forward
     }
     *endm = pos;
     return 2;
@@ -1504,7 +1500,7 @@ char *ProcessText(const char *buf, int l, int ambience) {
     C->may_have_args = T->may_have_args;
 
     ProcessContext();
-    outchar(0); /* note that outchar works with the half-destroyed context ! */
+    outchar(0); // note that outchar works with the half-destroyed context !
     s = C->out->buf;
     free(C->out);
     free(C);
@@ -1545,7 +1541,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     if (pos1 == pos2)
         return 0;
 
-    /* look for C operators starting with lowest precedence */
+    // look for C operators starting with lowest precedence
 
     if (SpliceInfix(buf, pos1, pos2, "||", &spl1, &spl2)) {
         if (!DoArithmEval(buf, pos1, spl1, &result1)
@@ -1590,7 +1586,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     if (SpliceInfix(buf, pos1, pos2, "!=", &spl1, &spl2)) {
         if (!DoArithmEval(buf, pos1, spl1, &result1)
                 || !DoArithmEval(buf, spl2, pos2, &result2)) {
-            /* revert to string comparison */
+            // revert to string comparison
             while ((pos1 < spl1) && isWhite(buf[spl1 - 1]))
                 spl1--;
             while ((pos2 > spl2) && isWhite(buf[spl2]))
@@ -1607,7 +1603,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     if (SpliceInfix(buf, pos1, pos2, "==", &spl1, &spl2)) {
         if (!DoArithmEval(buf, pos1, spl1, &result1)
                 || !DoArithmEval(buf, spl2, pos2, &result2)) {
-            /* revert to string comparison */
+            // revert to string comparison
             while ((pos1 < spl1) && isWhite(buf[spl1 - 1]))
                 spl1--;
             while ((pos2 > spl2) && isWhite(buf[spl2]))
@@ -1628,7 +1624,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     if (SpliceInfix(buf, pos1, pos2, ">=", &spl1, &spl2)) {
         if (!DoArithmEval(buf, pos1, spl1, &result1)
                 || !DoArithmEval(buf, spl2, pos2, &result2)) {
-            /* revert to string comparison */
+            // revert to string comparison
             while ((pos1 < spl1) && isWhite(buf[spl1 - 1]))
                 spl1--;
             while ((pos2 > spl2) && isWhite(buf[spl2]))
@@ -1647,7 +1643,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     if (SpliceInfix(buf, pos1, pos2, ">", &spl1, &spl2)) {
         if (!DoArithmEval(buf, pos1, spl1, &result1)
                 || !DoArithmEval(buf, spl2, pos2, &result2)) {
-            /* revert to string comparison */
+            // revert to string comparison
             while ((pos1 < spl1) && isWhite(buf[spl1 - 1]))
                 spl1--;
             while ((pos2 > spl2) && isWhite(buf[spl2]))
@@ -1666,7 +1662,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     if (SpliceInfix(buf, pos1, pos2, "<=", &spl1, &spl2)) {
         if (!DoArithmEval(buf, pos1, spl1, &result1)
                 || !DoArithmEval(buf, spl2, pos2, &result2)) {
-            /* revert to string comparison */
+            // revert to string comparison
             while ((pos1 < spl1) && isWhite(buf[spl1 - 1]))
                 spl1--;
             while ((pos2 > spl2) && isWhite(buf[spl2]))
@@ -1685,7 +1681,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
     if (SpliceInfix(buf, pos1, pos2, "<", &spl1, &spl2)) {
         if (!DoArithmEval(buf, pos1, spl1, &result1)
                 || !DoArithmEval(buf, spl2, pos2, &result2)) {
-            /* revert to string comparison */
+            // revert to string comparison
             while ((pos1 < spl1) && isWhite(buf[spl1 - 1]))
                 spl1--;
             while ((pos2 > spl2) && isWhite(buf[spl2]))
@@ -1767,7 +1763,7 @@ int DoArithmEval(char *buf, int pos1, int pos2, int *result) {
         return 1;
     }
 
-    /* add the length() builtin to measure the length of the macro expansion */
+    // add the length() builtin to measure the length of the macro expansion
     if (strncmp(buf + pos1, "length(", strlen("length(")) == 0) {
         if (buf[pos2 - 1] != ')')
             return 0;
@@ -1808,7 +1804,7 @@ char *ArithmEval(int pos1, int pos2) {
     char *s, *t;
     int i;
 
-    /* first define the defined(...) operator */
+    // first define the defined(...) operator
     i = findIdent("defined", strlen("defined"));
     if (i >= 0)
         warning("the defined(...) macro is already defined");
@@ -1817,12 +1813,12 @@ char *ArithmEval(int pos1, int pos2) {
         macros[nmacros].macrolen = 0;
         macros[nmacros].macrotext = XX malloc(1);
         macros[nmacros].macrotext[0] = 0;
-        macros[nmacros].nnamedargs = -2; /* trademark of the defined(...) macro */
+        macros[nmacros].nnamedargs = -2; // trademark of the defined(...) macro
         nmacros++;
     }
-    /* process the text in a usual way */
+    // process the text in a usual way
     s = ProcessText(C->buf + pos1, pos2 - pos1, FLAG_META);
-    /* undefine the defined(...) operator */
+    // undefine the defined(...) operator
     if (i < 0) {
         i = findIdent("defined", strlen("defined"));
         if ((i < 0) || (macros[i].nnamedargs != -2))
@@ -1832,7 +1828,7 @@ char *ArithmEval(int pos1, int pos2) {
     }
 
     if (!DoArithmEval(s, 0, strlen(s), &i))
-        return s; /* couldn't compute */
+        return s; // couldn't compute
     t = XX malloc(MAX_GPP_NUM_SIZE);
     sprintf(t, "%d", i);
     free(s);
@@ -1876,7 +1872,7 @@ void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
     char *s, *p;
     char const* opt;
     int nargs, check_isdelim;
-    char const* args[10]; /* can't have more than 10 arguments */
+    char const* args[10]; // can't have more than 10 arguments
 
     whiteout(&p1start, &p1end);
     if ((p1start == p1end) || (identifierEnd(p1start) != p1end))
@@ -1886,7 +1882,7 @@ void ProcessModeCommand(int p1start, int p1end, int p2start, int p2end) {
     else
         s = ProcessText(C->buf + p2start, p2end - p2start, FLAG_META);
 
-    /* argument parsing */
+    // argument parsing
     p = s;
     opt = NULL;
     while (isWhite(*p))
@@ -2026,8 +2022,8 @@ int ParsePossibleMeta(void) {
     if (nameend && !getChar(nameend - 1))
         return -1;
 
-    argc = 0; /* for #define with named args */
-    if (idequal(C->buf + cklen, nameend - cklen, "define")) /* check identifier */
+    argc = 0; // for #define with named args
+    if (idequal(C->buf + cklen, nameend - cklen, "define")) // check identifier
     {
         id = 1;
         expparams = 2;
@@ -2089,7 +2085,7 @@ int ParsePossibleMeta(void) {
     } else
         return -1;
 
-    /* #MODE magic : define "..." to be C-style strings */
+    // #MODE magic : define "..." to be C-style strings
     if (id == 14) {
         PushSpecs(S);
         delete_comment(S, my_strdup("\""));
@@ -2111,12 +2107,12 @@ int ParsePossibleMeta(void) {
         bug("Missing argument in meta-macro");
 
     switch (id) {
-    case 1: /* DEFINE */
+    case 1: // DEFINE
         if (!commented[iflevel]) {
-            whiteout(&p1start, &p1end); /* recall comments are not allowed here */
+            whiteout(&p1start, &p1end); // recall comments are not allowed here
             if ((p1start == p1end) || (identifierEnd(p1start) != p1end))
                 bug("#define requires an identifier (A-Z,a-z,0-9,_ only)");
-            /* buf starts 1 char before the macro */
+            // buf starts 1 char before the macro
             i = findIdent(C->buf + p1start, p1end - p1start);
             if (i >= 0)
                 delete_macro(i);
@@ -2132,7 +2128,7 @@ int ParsePossibleMeta(void) {
             if (argc) {
                 for (j = 0; j < argc; j++)
                     whiteout(argb + j, arge + j);
-                /* define with one empty argument */
+                // define with one empty argument
                 if ((argc == 1) && (arge[0] == argb[0]))
                     argc = 0;
                 macros[nmacros].argnames = XX malloc((argc + 1) * sizeof(char *));
@@ -2152,7 +2148,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 2: /* UNDEF */
+    case 2: // UNDEF
         if (!commented[iflevel]) {
             if (nparam == 2 && WarningLevel > 0)
                 warning("Extra argument to #undef ignored");
@@ -2165,7 +2161,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 3: /* IFDEF */
+    case 3: // IFDEF
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifdefs");
@@ -2182,7 +2178,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 4: /* IFNDEF */
+    case 4: // IFNDEF
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifdefs");
@@ -2198,7 +2194,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 5: /* ELSE */
+    case 5: // ELSE
         if (!commented[iflevel] && (nparam > 0) && WarningLevel > 0)
             warning("Extra argument to #else ignored");
         if (iflevel == 0)
@@ -2207,7 +2203,7 @@ int ParsePossibleMeta(void) {
             commented[iflevel] = !commented[iflevel];
         break;
 
-    case 6: /* ENDIF */
+    case 6: // ENDIF
         if (!commented[iflevel] && (nparam > 0) && WarningLevel > 0)
             warning("Extra argument to #endif ignored");
         if (iflevel == 0)
@@ -2215,13 +2211,13 @@ int ParsePossibleMeta(void) {
         iflevel--;
         break;
 
-    case 7: /* INCLUDE */
+    case 7: // INCLUDE
         bug("Internal meta-macro identification error: #include not allowed");
 
-    case 8: /* EXEC */
+    case 8: // EXEC
         bug("Internal meta-macro identification error: #exec not allowed");
 
-    case 9: /* DEFEVAL */
+    case 9: // DEFEVAL
         if (!commented[iflevel]) {
             whiteout(&p1start, &p1end);
             if ((p1start == p1end) || (identifierEnd(p1start) != p1end))
@@ -2241,7 +2237,7 @@ int ParsePossibleMeta(void) {
             if (argc) {
                 for (j = 0; j < argc; j++)
                     whiteout(argb + j, arge + j);
-                /* define with one empty argument */
+                // define with one empty argument
                 if ((argc == 1) && (arge[0] == argb[0]))
                     argc = 0;
                 macros[nmacros].argnames = XX malloc((argc + 1) * sizeof(char *));
@@ -2261,7 +2257,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 10: /* IFEQ */
+    case 10: // IFEQ
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifeqs");
@@ -2278,7 +2274,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 11: /* IFNEQ */
+    case 11: // IFNEQ
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifeqs");
@@ -2295,11 +2291,11 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 12: /* EVAL */
+    case 12: // EVAL
         if (!commented[iflevel]) {
             char *s, *t;
             if (nparam == 2)
-                p1end = p2end; /* we really want it all ! */
+                p1end = p2end; // we really want it all !
             s = ArithmEval(p1start, p1end);
             for (t = s; *t; t++)
                 outchar(*t);
@@ -2307,7 +2303,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 13: /* IF */
+    case 13: // IF
         iflevel++;
         if (iflevel == STACKDEPTH)
             bug("Too many nested #ifs");
@@ -2315,14 +2311,14 @@ int ParsePossibleMeta(void) {
         if (!commented[iflevel]) {
             char *s;
             if (nparam == 2)
-                p1end = p2end; /* we really want it all ! */
+                p1end = p2end; // we really want it all !
             s = ArithmEval(p1start, p1end);
             commented[iflevel] = ((s[0] == '0') && (s[1] == 0));
             free(s);
         }
         break;
 
-    case 14: /* MODE */
+    case 14: // MODE
         if (nparam == 1)
             p2start = -1;
         if (!commented[iflevel])
@@ -2330,17 +2326,17 @@ int ParsePossibleMeta(void) {
         PopSpecs();
         break;
 
-    case 15: { /* LINE */
+    case 15: { // LINE
         char buf[MAX_GPP_NUM_SIZE];
         sprintf(buf, "%d", C->lineno);
         sendout(buf, strlen(buf), 0);
     }
         break;
 
-    case 16: /* FILE */
+    case 16: // FILE
         bug("Internal meta-macro identification error: #file not allowed");
 
-    case 17: /* ELIF */
+    case 17: // ELIF
         if (iflevel == 0)
             bug("#elif without #if");
         if (!commented[iflevel - 1]) {
@@ -2350,7 +2346,7 @@ int ParsePossibleMeta(void) {
                 char *s;
                 commented[iflevel] = 0;
                 if (nparam == 2)
-                    p1end = p2end; /* we really want it all ! */
+                    p1end = p2end; // we really want it all !
                 s = ArithmEval(p1start, p1end);
                 commented[iflevel] = ((s[0] == '0') && (s[1] == 0));
                 free(s);
@@ -2358,7 +2354,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 18: /* ERROR */
+    case 18: // ERROR
         if (!commented[iflevel])
             bug(
                     ProcessText(C->buf + p1start,
@@ -2366,7 +2362,7 @@ int ParsePossibleMeta(void) {
                             FLAG_META));
         break;
 
-    case 19: /* WARNING */
+    case 19: // WARNING
         if (!commented[iflevel]) {
             char *s;
             s = ProcessText(C->buf + p1start,
@@ -2376,7 +2372,7 @@ int ParsePossibleMeta(void) {
         }
         break;
 
-    case 20: /* DATE */
+    case 20: // DATE
         bug("Internal meta-macro identification error: #date not allowed");
 
     default:
@@ -2417,7 +2413,7 @@ int ParsePossibleUser(void) {
         argc = 0;
     }
 
-    if (macros[id].nnamedargs == -2) { /* defined(...) macro for arithmetic */
+    if (macros[id].nnamedargs == -2) { // defined(...) macro for arithmetic
         char *s, *t;
         if (argc != 1)
             return -1;
@@ -2437,14 +2433,14 @@ int ParsePossibleUser(void) {
         shiftIn(macend);
         return 0;
     }
-    if (!macros[id].macrotext[0]) { /* the empty macro */
+    if (!macros[id].macrotext[0]) { // the empty macro
         shiftIn(macend);
         return 0;
     }
 
     for (i = 0; i < argc; i++)
         argv[i] = ProcessText(C->buf + argb[i], arge[i] - argb[i], FLAG_USER);
-    /* process macro text */
+    // process macro text
     T = C;
     C = XX malloc(sizeof *C);
     C->out = T->out;
@@ -2455,7 +2451,7 @@ int ParsePossibleUser(void) {
     C->may_have_args = 1;
     if ((macros[id].nnamedargs == -1) && (lg_end >= 0)
             && (macros[id].define_specs->User.mEnd[0] == 0)) {
-        /* build an aliased macro call */
+        // build an aliased macro call
         l = strlen(macros[id].macrotext) + 2
                 + strlen(macros[id].define_specs->User.mArgS)
                 + strlen(macros[id].define_specs->User.mArgE)
@@ -2504,7 +2500,7 @@ void ParseText(void) {
     char c, *s;
     struct COMMENT *p;
 
-    /* look for comments first */
+    // look for comments first
     if (!C->in_comment) {
         cs = 1;
         for (p = S->comments; p != NULL ; p = p->next)
@@ -2537,9 +2533,9 @@ void ParseText(void) {
         return;
 
     l = 1;
-    /* If matching numbered macro argument and inside a macro */
+    // If matching numbered macro argument and inside a macro
     if (matchSequence(S->User.mArgRef, &l) && C->may_have_args) {
-        /* Process macro arguments referenced as #1,#2,... */
+        // Process macro arguments referenced as #1,#2,...
         c = getChar(l);
         if ((c >= '1') && (c <= '9')) {
             c = c - '1';
