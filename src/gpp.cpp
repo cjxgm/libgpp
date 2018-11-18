@@ -28,6 +28,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cctype>
+#include <cstdint>
 
 #include <utility>      // for std::move
 
@@ -100,14 +101,13 @@ struct MODE {
 MODE CUser = {"",       "",   "(",   ",",   ")", "#", '\\', "(", ")" };
 MODE CMeta = {"#",      "\n", "\001","\001","\n","#", '\\', "(", ")" };
 
-#define DEFAULT_OP_STRING (unsigned char *)"+-*/\\^<>=`~:.?@#&!%|"
-#define DEFAULT_OP_PLUS   (unsigned char *)"()[]{}"
-#define DEFAULT_ID_STRING (unsigned char *)"\005\007_" // or equiv. "A-Za-z0-9_"
+#define DEFAULT_OP_STRING (unsigned char const*)"+-*/\\^<>=`~:.?@#&!%|"
+#define DEFAULT_OP_PLUS   (unsigned char const*)"()[]{}"
+#define DEFAULT_ID_STRING (unsigned char const*)"\005\007_" // or equiv. "A-Za-z0-9_"
 
-// here we assume that longs are at least 32 bit... if not, change this !
-#define LOG_LONG_BITS 5
-#define CHARSET_SUBSET_LEN (256 >> LOG_LONG_BITS)
-using CHARSET_SUBSET = unsigned long *;
+#define LOG_32_BITS 5
+#define CHARSET_SUBSET_LEN (256 >> LOG_32_BITS)
+using CHARSET_SUBSET = std::uint32_t *;
 
 CHARSET_SUBSET DefaultOp, DefaultExtOp, PrologOp, DefaultId;
 
@@ -845,7 +845,7 @@ int iterIdentifierEnd(int start) {
 }
 
 int IsInCharset(CHARSET_SUBSET x, int c) {
-    return (x[c >> LOG_LONG_BITS] & 1L << (c & ((1 << LOG_LONG_BITS) - 1))) != 0;
+    return (x[c >> LOG_32_BITS] & 1L << (c & ((1 << LOG_32_BITS) - 1))) != 0;
 }
 
 int matchSequence(const char *s, int *pos) {
@@ -1002,22 +1002,21 @@ int matchStartSequence(const char *s, int *pos) {
 }
 
 void AddToCharset(CHARSET_SUBSET x, int c) {
-    x[c >> LOG_LONG_BITS] |= 1L << (c & ((1 << LOG_LONG_BITS) - 1));
+    x[c >> LOG_32_BITS] |= 1L << (c & ((1 << LOG_32_BITS) - 1));
 }
 
-CHARSET_SUBSET MakeCharsetSubset(unsigned char *s) {
+CHARSET_SUBSET MakeCharsetSubset(unsigned char const* s) {
     CHARSET_SUBSET x;
     int i;
     unsigned char c;
 
-    x = XX malloc(CHARSET_SUBSET_LEN * sizeof(unsigned long));
+    x = XX malloc(CHARSET_SUBSET_LEN * sizeof(std::uint32_t));
     for (i = 0; i < CHARSET_SUBSET_LEN; i++)
         x[i] = 0;
     while (*s != 0) {
         if (!((*s) & 0x60)) { // special sequences
             if ((*s) & 0x80)
-                bug(
-                        "negated special sequences not allowed in charset specifications");
+                bug("negated special sequences not allowed in charset specifications");
             switch ((*s) & 0x1f) {
             case '\002': // \w, \W, \i, \o, \O not allowed
             case '\004':
