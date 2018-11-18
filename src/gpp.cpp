@@ -30,7 +30,9 @@
 #include <cctype>
 #include <cstdint>
 
+#include <string>
 #include <utility>      // for std::move
+#include <stdexcept>
 
 namespace
 {
@@ -236,10 +238,14 @@ static int my_strcasecmp(const char *s, const char *s2) {
     return 0;
 }
 
-__attribute__((__noreturn__))
+[[noreturn]]
 void bug(const char *s) {
-    fprintf(stderr, "%d: error: %s\n", C->lineno, s);
-    exit(EXIT_FAILURE);
+    std::string msg;
+    msg += "error at line ";
+    msg += std::to_string(C->lineno);
+    msg += ": ";
+    msg += s;
+    throw std::runtime_error{msg};
 }
 
 void warning(const char *s) {
@@ -2577,7 +2583,19 @@ void finishthings() {
 int main(int argc, char *argv[]) {
     (void) argc;
     initthings(argv);
-    process_context();
+    try {
+        process_context();
+    }
+    catch (std::exception const& e) {
+        fprintf(stderr, "\e[1;31m ERROR \e[0m %s\n", e.what());
+        finishthings();
+        return EXIT_FAILURE;
+    }
+    catch (...) {
+        fprintf(stderr, "\e[1;31m UNKNOWN ERROR \e[0m\n");
+        finishthings();
+        return EXIT_FAILURE;
+    }
     finishthings();
 }
 

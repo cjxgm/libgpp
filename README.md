@@ -43,4 +43,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
   - Convert to a consistent naming style.
   - Convert `function(void)` to `function()`.
   - Do not leak heap memory before quitting.
+  - Throws `std::runtime_error` when encountering `bug(...)`.
 
