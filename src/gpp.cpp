@@ -24,10 +24,10 @@
 
 #define PACKAGE_STRING "GPP v2.26-60260df libgpp v1.0.0"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cctype>
 
 #include <utility>      // for std::move
 
