@@ -14,3 +14,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 - Removed `config.h`. Uses only ANSI C. No platform-specific code/library any more.
   No POSIX support any more.
 
+- Removed deprecated command-line options.
+

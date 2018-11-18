@@ -1200,47 +1200,12 @@ void initthings(int argc, char **argv) {
             display_version();
             exit(EXIT_SUCCESS);
         }
-#define DEPRECATED_WARNING fprintf(stderr, "gpp: warning: deprecated option `%s'; use `-%s' instead\n", *arg, *arg)
-        if (strcmp(*arg, "-nostdinc") == 0) {
-            DEPRECATED_WARNING;
-            NoStdInc = 1;
-            continue;
-        }
-        if (strcmp(*arg, "-nocurinc") == 0) {
-            DEPRECATED_WARNING;
-            NoCurIncFirst = 1;
-            continue;
-        }
-        if (strcmp(*arg, "-curdirinclast") == 0) {
-            DEPRECATED_WARNING;
-            CurDirIncLast = 1;
-            NoCurIncFirst = 1;
-            continue;
-        }
-        if (strcmp(*arg, "-includemarker") == 0) {
-            DEPRECATED_WARNING;
-            if (!(*(++arg))) {
-                usage();
-                exit(EXIT_FAILURE);
-            }
-            construct_include_directive_marker(&include_directive_marker, *arg);
-            continue;
-        }
         if (strcmp(*arg, "--include") == 0) {
             if (!(*(++arg))) {
                 usage();
                 exit(EXIT_FAILURE);
             }
             IncludeFile = *arg;
-            continue;
-        }
-        if (strcmp(*arg, "-warninglevel") == 0) {
-            DEPRECATED_WARNING;
-            if (!(*(++arg))) {
-                usage();
-                exit(EXIT_FAILURE);
-            }
-            WarningLevel = atoi(*arg);
             continue;
         }
         if (strcmp(*arg, "--nostdinc") == 0) {
