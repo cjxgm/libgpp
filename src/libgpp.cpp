@@ -41,7 +41,8 @@ namespace
         // Autocast is written by Giumo Clanjor and
         // has been contributed to the public domain.
         // Inspired by JAI's `xx` operator.
-        #define AUTOCAST      ::autocast::Caster_Builder{} /
+        #define AUTOCAST_TIGHT      ::autocast::Caster_Builder{} /
+        #define AUTOCAST_LOOSE      ::autocast::Caster_Builder{} ==
 
         template <class T>
         struct Caster
@@ -62,10 +63,14 @@ namespace
         {
             template <class T>
             constexpr auto operator / (T value) const { return Caster<T>{value}; }
+
+            template <class T>
+            constexpr auto operator == (T value) const { return Caster<T>{value}; }
         };
     }
 
-    #define XX      AUTOCAST
+    #define XX      AUTOCAST_TIGHT
+    #define XXX     AUTOCAST_LOOSE
 
     #define STACKDEPTH 50
     #define MAXARGS 100
