@@ -6,7 +6,7 @@
 
 namespace
 {
-    #define PACKAGE_STRING "GPP v2.26-60260df libgpp v1.0.0"
+    #define PACKAGE_STRING "GPP v2.26-60260df libgpp v1.1.0"
 
     void display_version() {
         fprintf(stderr, PACKAGE_STRING "\n");
