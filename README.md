@@ -50,3 +50,7 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - Support process string to string in memory.
 
+### v1.1.1
+
+- Ignore `\r` in source string.
+

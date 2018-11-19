@@ -33,6 +33,7 @@
 #include <string>
 #include <utility>      // for std::move
 #include <stdexcept>
+#include <algorithm>
 
 namespace
 {
@@ -900,12 +901,14 @@ namespace
         {
             C->read_stdin = 0;
             C->eof = 0;
-            C->len = XX (source.size() + 1);    // prepend '\n'
-            C->bufsize = C->len + 1;            // count in '\0'
-            C->buf = C->malloced_buf = XX malloc(C->bufsize);
+            C->buf = C->malloced_buf = XX malloc(source.size() + 2);    // prepend '\n', append '\0'
+
+            auto first = &C->buf[1];
+            auto last = std::copy_if(begin(source), end(source), first, [] (char x) { return (x != '\r'); });
+            *last = '\0';
             C->buf[0] = '\n';
-            C->buf[C->len] = '\0';
-            memcpy(C->buf + 1, source.data(), source.size());
+            C->len = XXX last - C->buf;
+            C->bufsize = C->len + 1;
 
             C->out->output_char_data = &output;
             C->out->output_char = [] (char x, void* raw_output) {
