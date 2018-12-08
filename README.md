@@ -60,3 +60,5 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - Do not use macros for constants, use constexpr.
 
+- Use `std::to_string` instead of allocating an arbitrarily-sized buffer to `sprintf` an `int` to a string.
+

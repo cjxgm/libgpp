@@ -75,7 +75,6 @@ namespace
 
     constexpr auto max_stack_depth = 50;
     constexpr auto max_arg_count = 100;
-    constexpr auto max_digit_count_of_number = 15;
 
     struct Syntax_Mode {
         char const* macro_start;        // before macro name
@@ -1568,11 +1567,8 @@ namespace
         }
 
         char *arithm_eval(int pos1, int pos2) {
-            char *s, *t;
-            int i;
-
             // first define the defined(...) operator
-            i = find_ident("defined", strlen("defined"));
+            auto i = find_ident("defined", strlen("defined"));
             if (i >= 0)
                 warning("the defined(...) macro is already defined");
             else {
@@ -1584,7 +1580,7 @@ namespace
                 nmacros++;
             }
             // process the text in a usual way
-            s = process_text(C->buf + pos1, pos2 - pos1, FLAG_META);
+            auto s = process_text(C->buf + pos1, pos2 - pos1, FLAG_META);
             // undefine the defined(...) operator
             if (i < 0) {
                 i = find_ident("defined", strlen("defined"));
@@ -1596,10 +1592,10 @@ namespace
 
             if (!do_arithm_eval(s, 0, strlen(s), &i))
                 return s; // couldn't compute
-            t = XX malloc(max_digit_count_of_number);
-            sprintf(t, "%d", i);
+
             free(s);
-            return t;
+            auto result = std::to_string(i);
+            return my_strdup(result.data());
         }
 
         int comment_or_white(int start, int end, int cmtmode) {
@@ -2093,9 +2089,8 @@ namespace
                 break;
 
             case 15: { // LINE
-                char buf[max_digit_count_of_number];
-                sprintf(buf, "%d", C->lineno);
-                sendout(buf, strlen(buf), 0);
+                auto buf = std::to_string(C->lineno);
+                sendout(buf.data(), int(buf.size()), 0);
                 break;
             }
 
