@@ -73,10 +73,9 @@ namespace
     #define XX      AUTOCAST_TIGHT
     #define XXX     AUTOCAST_LOOSE
 
-    #define STACKDEPTH 50
-    #define MAXARGS 100
-
-    #define MAX_GPP_NUM_SIZE 15
+    constexpr auto max_stack_depth = 50;
+    constexpr auto max_arg_count = 100;
+    constexpr auto max_digit_count_of_number = 15;
 
     struct Syntax_Mode {
         char const* macro_start;        // before macro name
@@ -928,7 +927,7 @@ namespace
 
         Input_Context* C{};
 
-        int commented[STACKDEPTH]{}, iflevel{};
+        int commented[max_stack_depth]{}, iflevel{};
         // commented = 0: output, 1: not output,
         // 2: not output because we're in a #elif and we've already gone through
         // the right case (so #else/#elif can't toggle back to output)
@@ -1389,7 +1388,7 @@ namespace
             if (match) {
                 *argc = 0;
                 while (1) {
-                    if (*argc >= MAXARGS)
+                    if (*argc >= max_arg_count)
                         bug("too many macro parameters");
                     argb[*argc] = pos;
                     k = 0;
@@ -1597,7 +1596,7 @@ namespace
 
             if (!do_arithm_eval(s, 0, strlen(s), &i))
                 return s; // couldn't compute
-            t = XX malloc(MAX_GPP_NUM_SIZE);
+            t = XX malloc(max_digit_count_of_number);
             sprintf(t, "%d", i);
             free(s);
             return t;
@@ -1780,7 +1779,7 @@ namespace
             int cklen, nameend;
             int id, expparams, nparam, i, j;
             int p1start{}, p1end{}, p2start{}, p2end{}, macend{};
-            int argc, argb[MAXARGS], arge[MAXARGS];
+            int argc, argb[max_arg_count], arge[max_arg_count];
             char *tmpbuf;
 
             cklen = 1;
@@ -1930,7 +1929,7 @@ namespace
 
             case 3: // IFDEF
                 iflevel++;
-                if (iflevel == STACKDEPTH)
+                if (iflevel == max_stack_depth)
                     bug("too many nested #ifdefs");
                 commented[iflevel] = commented[iflevel - 1];
 
@@ -1947,7 +1946,7 @@ namespace
 
             case 4: // IFNDEF
                 iflevel++;
-                if (iflevel == STACKDEPTH)
+                if (iflevel == max_stack_depth)
                     bug("too many nested #ifdefs");
                 commented[iflevel] = commented[iflevel - 1];
                 if (!commented[iflevel]) {
@@ -2026,7 +2025,7 @@ namespace
 
             case 10: // IFEQ
                 iflevel++;
-                if (iflevel == STACKDEPTH)
+                if (iflevel == max_stack_depth)
                     bug("too many nested #ifeqs");
                 commented[iflevel] = commented[iflevel - 1];
                 if (!commented[iflevel]) {
@@ -2043,7 +2042,7 @@ namespace
 
             case 11: // IFNEQ
                 iflevel++;
-                if (iflevel == STACKDEPTH)
+                if (iflevel == max_stack_depth)
                     bug("too many nested #ifeqs");
                 commented[iflevel] = commented[iflevel - 1];
                 if (!commented[iflevel]) {
@@ -2072,7 +2071,7 @@ namespace
 
             case 13: // IF
                 iflevel++;
-                if (iflevel == STACKDEPTH)
+                if (iflevel == max_stack_depth)
                     bug("too many nested #ifs");
                 commented[iflevel] = commented[iflevel - 1];
                 if (!commented[iflevel]) {
@@ -2094,7 +2093,7 @@ namespace
                 break;
 
             case 15: { // LINE
-                char buf[MAX_GPP_NUM_SIZE];
+                char buf[max_digit_count_of_number];
                 sprintf(buf, "%d", C->lineno);
                 sendout(buf, strlen(buf), 0);
                 break;
@@ -2152,8 +2151,8 @@ namespace
         int parse_possible_user() {
             int idstart, idend, sh_end, lg_end, macend;
             int argc, id, i, l;
-            char *argv[MAXARGS];
-            int argb[MAXARGS], arge[MAXARGS];
+            char *argv[max_arg_count];
+            int argb[max_arg_count], arge[max_arg_count];
             Input_Context *T;
 
             idstart = 1;
