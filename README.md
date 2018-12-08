@@ -54,3 +54,7 @@ This is the first release. Differences to GPP `v2.26-60260df`:
 
 - Ignore `\r` in source string.
 
+### v1.1.2
+
+- Fix warnings under GCC.
+

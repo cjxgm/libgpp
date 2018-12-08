@@ -960,7 +960,7 @@ namespace
                     bug("out of memory");
             }
             macros[nmacros].username = XX malloc(len + 1);
-            strncpy(macros[nmacros].username, s, len);
+            strncpy(macros[nmacros].username, s, len + 1);
             macros[nmacros].username[len] = 0;
             macros[nmacros].argnames = nullptr;
             macros[nmacros].nnamedargs = 0;
@@ -1779,7 +1779,7 @@ namespace
         int parse_possible_meta() {
             int cklen, nameend;
             int id, expparams, nparam, i, j;
-            int p1start, p1end, p2start, p2end, macend;
+            int p1start{}, p1end{}, p2start{}, p2end{}, macend{};
             int argc, argb[MAXARGS], arge[MAXARGS];
             char *tmpbuf;
 
